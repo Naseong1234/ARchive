@@ -1,0 +1,5 @@
+C:/Users/Admin/Documents/GitHub/ARchive/ARchive_AI/.utmp/RelWithDebInfo/7264241z/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/Admin/Documents/GitHub/ARchive/ARchive_AI/.utmp/RelWithDebInfo/7264241z/arm64-v8a/CMakeFiles/rebuild_cache.dir
+C:/Users/Admin/Documents/GitHub/ARchive/ARchive_AI/.utmp/RelWithDebInfo/7264241z/arm64-v8a/GameActivity/CMakeFiles/game.dir
+C:/Users/Admin/Documents/GitHub/ARchive/ARchive_AI/.utmp/RelWithDebInfo/7264241z/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
+C:/Users/Admin/Documents/GitHub/ARchive/ARchive_AI/.utmp/RelWithDebInfo/7264241z/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
