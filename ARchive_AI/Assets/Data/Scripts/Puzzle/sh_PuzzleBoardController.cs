@@ -236,6 +236,48 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         EvaluatePuzzleCompletion();
     }
 
+    public void UseHint()
+    {
+        if (hasInvokedPuzzleCompleted)
+        {
+            return;
+        }
+
+        List<sh_PuzzleDragHandler> hintCandidates = new List<sh_PuzzleDragHandler>();
+
+        for (int index = 0; index < spawnedPieces.Count; index++)
+        {
+            sh_PuzzlePieceUI pieceUI = spawnedPieces[index];
+            sh_PuzzleDragHandler dragHandler = GetDragHandler(pieceUI);
+            if (dragHandler == null || dragHandler.IsLocked)
+            {
+                continue;
+            }
+
+            sh_PuzzleSlot correctSlot = FindSlotByNumber(pieceUI.AnswerSlotNumber);
+            if (correctSlot == null)
+            {
+                continue;
+            }
+
+            if (IsCorrectPlacement(pieceUI, correctSlot) && dragHandler.CurrentSlot == correctSlot)
+            {
+                continue;
+            }
+
+            hintCandidates.Add(dragHandler);
+        }
+
+        if (hintCandidates.Count == 0)
+        {
+            return;
+        }
+
+        int randomIndex = UnityEngine.Random.Range(0, hintCandidates.Count);
+        sh_PuzzleDragHandler selectedDragHandler = hintCandidates[randomIndex];
+        ApplyHintToPiece(selectedDragHandler);
+    }
+
     private void ResolveReferences()
     {
         if (rotationRandomizer == null)
@@ -662,6 +704,75 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         ClearRuntimeAssets();
     }
 
+    private void ApplyHintToPiece(sh_PuzzleDragHandler dragHandler)
+    {
+        if (dragHandler == null || dragHandler.PuzzlePieceUI == null)
+        {
+            return;
+        }
+
+        sh_PuzzlePieceUI movingPiece = dragHandler.PuzzlePieceUI;
+        sh_PuzzleSlot targetSlot = FindSlotByNumber(movingPiece.AnswerSlotNumber);
+        if (targetSlot == null)
+        {
+            return;
+        }
+
+        if (dragHandler.CurrentSlot != null)
+        {
+            dragHandler.CurrentSlot.ClearPiece(movingPiece);
+            dragHandler.ClearCurrentSlot();
+        }
+
+        if (dragHandler.CurrentSpawnPoint != null)
+        {
+            ClearSpawnPointOccupant(dragHandler.CurrentSpawnPoint, movingPiece);
+            dragHandler.ClearCurrentSpawnPoint();
+        }
+
+        sh_PuzzlePieceUI targetPiece = targetSlot.CurrentPiece;
+        sh_PuzzleDragHandler targetDragHandler = GetDragHandler(targetPiece);
+
+        if (targetDragHandler != null && targetPiece != null && targetPiece != movingPiece)
+        {
+            MovePieceToAvailableSpawnPointOrPrevious(targetDragHandler, dragHandler);
+        }
+
+        movingPiece.SetRotationValue(0);
+        targetSlot.AssignPiece(movingPiece);
+        dragHandler.AssignToSlot(targetSlot);
+        dragHandler.SetPlacedCorrectly(true);
+
+        if (lockPieceWhenPlacedCorrectly)
+        {
+            dragHandler.SetLocked(true);
+        }
+
+        dragHandler.ClearPreviousSlotReference();
+        dragHandler.ClearPreviousSpawnPointReference();
+        EvaluatePuzzleCompletion();
+    }
+
+    private void MovePieceToAvailableSpawnPointOrPrevious(sh_PuzzleDragHandler targetDragHandler, sh_PuzzleDragHandler sourceDragHandler)
+    {
+        if (targetDragHandler == null)
+        {
+            return;
+        }
+
+        targetDragHandler.SetLocked(false);
+
+        if (TryFindAnyAvailableSpawnPoint(out RectTransform availableSpawnPoint))
+        {
+            SetSpawnPointOccupant(availableSpawnPoint, targetDragHandler.PuzzlePieceUI);
+            targetDragHandler.AssignToSpawnPoint(availableSpawnPoint);
+            targetDragHandler.SetPlacedCorrectly(false);
+            return;
+        }
+
+        MovePieceToPreviousPlacement(targetDragHandler, sourceDragHandler);
+    }
+
     private void PlacePieceOnSlot(sh_PuzzleDragHandler dragHandler, sh_PuzzleSlot targetSlot)
     {
         if (dragHandler == null || targetSlot == null)
@@ -819,6 +930,38 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
     private static sh_PuzzleDragHandler GetDragHandler(sh_PuzzlePieceUI pieceUI)
     {
         return pieceUI != null ? pieceUI.GetComponent<sh_PuzzleDragHandler>() : null;
+    }
+
+    private sh_PuzzleSlot FindSlotByNumber(int slotNumber)
+    {
+        for (int index = 0; index < puzzleSlots.Length; index++)
+        {
+            if (puzzleSlots[index] != null && puzzleSlots[index].SlotNumber == slotNumber)
+            {
+                return puzzleSlots[index];
+            }
+        }
+
+        return null;
+    }
+
+    private bool TryFindAnyAvailableSpawnPoint(out RectTransform availableSpawnPoint)
+    {
+        EnsureSpawnPointOccupancyArray();
+
+        for (int index = 0; index < pieceSpawnPoints.Length; index++)
+        {
+            if (pieceSpawnPoints[index] == null || spawnPointOccupants[index] != null)
+            {
+                continue;
+            }
+
+            availableSpawnPoint = pieceSpawnPoints[index];
+            return true;
+        }
+
+        availableSpawnPoint = null;
+        return false;
     }
 
     private static bool IsCorrectPlacement(sh_PuzzlePieceUI pieceUI, sh_PuzzleSlot slot)

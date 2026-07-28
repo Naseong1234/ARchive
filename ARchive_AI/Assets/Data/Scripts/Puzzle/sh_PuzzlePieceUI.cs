@@ -88,6 +88,16 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         return NormalizeRotation(currentRotationValue);
     }
 
+    public void SetRotationValue(int rotationValue)
+    {
+        currentRotationValue = NormalizeRotation(rotationValue);
+
+        if (rectTransform != null)
+        {
+            rectTransform.localRotation = Quaternion.Euler(0f, 0f, currentRotationValue);
+        }
+    }
+
     private void ResolveReferences()
     {
         if (inputImage == null)
