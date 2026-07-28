@@ -4,14 +4,17 @@ using UnityEngine.UI;
 public sealed class sh_PuzzlePieceUI : MonoBehaviour
 {
     [Header("UI References")]
+    [SerializeField] private Image inputImage;
     [SerializeField] private Image pieceImage;
     [SerializeField] private RectTransform rectTransform;
+    [SerializeField] private AspectRatioFitter pieceImageAspectFitter;
 
     [Header("Debug Data")]
     [SerializeField] private int answerSlotNumber;
     [SerializeField] private int currentRotationValue;
     [SerializeField] private bool isPlacedCorrectly;
 
+    public Image InputImage => inputImage;
     public Image PieceImage => pieceImage;
     public RectTransform RectTransform => rectTransform;
     public int AnswerSlotNumber => answerSlotNumber;
@@ -46,8 +49,15 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         if (pieceImage != null)
         {
             pieceImage.sprite = pieceSprite;
-            pieceImage.preserveAspect = true;
+            pieceImage.preserveAspect = false;
             pieceImage.enabled = pieceSprite != null;
+        }
+
+        if (pieceImageAspectFitter != null)
+        {
+            pieceImageAspectFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            pieceImageAspectFitter.aspectRatio = GetAspectRatio(pieceSprite);
+            pieceImageAspectFitter.enabled = pieceSprite != null;
         }
 
         if (rectTransform != null)
@@ -80,14 +90,29 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
 
     private void ResolveReferences()
     {
+        if (inputImage == null)
+        {
+            inputImage = GetComponent<Image>();
+        }
+
         if (pieceImage == null)
         {
-            pieceImage = GetComponent<Image>();
+            pieceImage = GetComponentInChildren<Image>(true);
+
+            if (pieceImage == inputImage)
+            {
+                pieceImage = null;
+            }
         }
 
         if (rectTransform == null)
         {
             rectTransform = transform as RectTransform;
+        }
+
+        if (pieceImageAspectFitter == null && pieceImage != null)
+        {
+            pieceImageAspectFitter = pieceImage.GetComponent<AspectRatioFitter>();
         }
     }
 
@@ -101,5 +126,15 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         }
 
         return normalizedValue;
+    }
+
+    private static float GetAspectRatio(Sprite pieceSprite)
+    {
+        if (pieceSprite == null || pieceSprite.rect.height <= 0f)
+        {
+            return 1f;
+        }
+
+        return pieceSprite.rect.width / pieceSprite.rect.height;
     }
 }
