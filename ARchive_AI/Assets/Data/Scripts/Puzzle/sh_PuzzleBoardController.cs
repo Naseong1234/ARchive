@@ -185,12 +185,37 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         dragHandler.AssignToSlot(nearestSlot);
         dragHandler.ClearPreviousSlotReference();
 
-        bool isCorrectSlot = dragHandler.PuzzlePieceUI != null &&
-            dragHandler.PuzzlePieceUI.AnswerSlotNumber == nearestSlot.SlotNumber;
+        bool isCorrectPlacement = IsCorrectPlacement(dragHandler.PuzzlePieceUI, nearestSlot);
+        dragHandler.SetPlacedCorrectly(isCorrectPlacement);
 
-        dragHandler.SetPlacedCorrectly(isCorrectSlot);
+        if (isCorrectPlacement && lockPieceWhenPlacedCorrectly)
+        {
+            dragHandler.SetLocked(true);
+        }
 
-        if (isCorrectSlot && lockPieceWhenPlacedCorrectly)
+        EvaluatePuzzleCompletion();
+    }
+
+    public void HandlePieceTapped(sh_PuzzleDragHandler dragHandler)
+    {
+        if (dragHandler == null || dragHandler.PuzzlePieceUI == null)
+        {
+            return;
+        }
+
+        dragHandler.PuzzlePieceUI.RotateClockwise();
+
+        sh_PuzzleSlot currentSlot = dragHandler.CurrentSlot;
+        if (currentSlot == null)
+        {
+            dragHandler.SetPlacedCorrectly(false);
+            return;
+        }
+
+        bool isCorrectPlacement = IsCorrectPlacement(dragHandler.PuzzlePieceUI, currentSlot);
+        dragHandler.SetPlacedCorrectly(isCorrectPlacement);
+
+        if (isCorrectPlacement && lockPieceWhenPlacedCorrectly)
         {
             dragHandler.SetLocked(true);
         }
@@ -430,9 +455,8 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             previousSlot.AssignPiece(dragHandler.PuzzlePieceUI);
             dragHandler.AssignToSlot(previousSlot);
 
-            bool isCorrectSlot = dragHandler.PuzzlePieceUI != null &&
-                dragHandler.PuzzlePieceUI.AnswerSlotNumber == previousSlot.SlotNumber;
-            dragHandler.SetPlacedCorrectly(isCorrectSlot);
+            bool isCorrectPlacement = IsCorrectPlacement(dragHandler.PuzzlePieceUI, previousSlot);
+            dragHandler.SetPlacedCorrectly(isCorrectPlacement);
             dragHandler.ClearPreviousSlotReference();
             return;
         }
@@ -459,7 +483,7 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
                 return;
             }
 
-            if (slot.CurrentPiece.AnswerSlotNumber != slot.SlotNumber)
+            if (!IsCorrectPlacement(slot.CurrentPiece, slot))
             {
                 return;
             }
@@ -564,5 +588,13 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
     private void OnDestroy()
     {
         ClearRuntimeAssets();
+    }
+
+    private static bool IsCorrectPlacement(sh_PuzzlePieceUI pieceUI, sh_PuzzleSlot slot)
+    {
+        return pieceUI != null &&
+            slot != null &&
+            pieceUI.AnswerSlotNumber == slot.SlotNumber &&
+            pieceUI.GetNormalizedRotationValue() == 0;
     }
 }

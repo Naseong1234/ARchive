@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("Runtime References")]
     [SerializeField] private sh_PuzzlePieceUI puzzlePieceUI;
@@ -11,6 +11,7 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
     [Header("Debug Data")]
     [SerializeField] private bool isLocked;
     [SerializeField] private bool isPlacedCorrectly;
+    [SerializeField] private float tapMovementThreshold = 15f;
 
     private sh_PuzzleBoardController puzzleBoardController;
     private RectTransform dragParentRectTransform;
@@ -18,6 +19,8 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
     private sh_PuzzleSlot previousSlotBeforeDrag;
     private Vector3 returnWorldPosition;
     private Vector3 pointerToPieceOffset;
+    private Vector2 pointerDownScreenPosition;
+    private bool didDragThisPress;
     private int originalSiblingIndex;
 
     public sh_PuzzlePieceUI PuzzlePieceUI => puzzlePieceUI;
@@ -47,6 +50,18 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
         SetPlacedCorrectly(false);
         currentSlot = null;
         previousSlotBeforeDrag = null;
+        didDragThisPress = false;
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (isLocked)
+        {
+            return;
+        }
+
+        pointerDownScreenPosition = eventData.position;
+        didDragThisPress = false;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -56,6 +71,7 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
             return;
         }
 
+        didDragThisPress = true;
         previousSlotBeforeDrag = currentSlot;
         originalSiblingIndex = rectTransform.GetSiblingIndex();
         rectTransform.SetAsLastSibling();
@@ -85,20 +101,13 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
             return;
         }
 
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+        if (RectTransformUtility.ScreenPointToWorldPointInRectangle(
             parentRectTransform,
             eventData.position,
             eventData.pressEventCamera,
-            out _))
+            out Vector3 worldPoint))
         {
-            if (RectTransformUtility.ScreenPointToWorldPointInRectangle(
-                parentRectTransform,
-                eventData.position,
-                eventData.pressEventCamera,
-                out Vector3 worldPoint))
-            {
-                rectTransform.position = worldPoint + pointerToPieceOffset;
-            }
+            rectTransform.position = worldPoint + pointerToPieceOffset;
         }
     }
 
@@ -123,6 +132,26 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDr
         }
 
         puzzleBoardController.HandlePieceEndDrag(this);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (isLocked || puzzleBoardController == null)
+        {
+            return;
+        }
+
+        if (didDragThisPress)
+        {
+            return;
+        }
+
+        if (Vector2.Distance(pointerDownScreenPosition, eventData.position) > tapMovementThreshold)
+        {
+            return;
+        }
+
+        puzzleBoardController.HandlePieceTapped(this);
     }
 
     public void CaptureCurrentPositionAsReturnPosition()

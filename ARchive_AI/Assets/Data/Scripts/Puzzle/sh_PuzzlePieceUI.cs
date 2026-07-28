@@ -39,7 +39,7 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         ResolveReferences();
 
         answerSlotNumber = pieceData.AnswerSlotNumber;
-        currentRotationValue = pieceData.CurrentRotationValue;
+        currentRotationValue = NormalizeRotation(pieceData.CurrentRotationValue);
         isPlacedCorrectly = false;
         gameObject.name = $"PuzzlePiece_{answerSlotNumber:00}";
 
@@ -61,6 +61,23 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         isPlacedCorrectly = isCorrect;
     }
 
+    public int RotateClockwise()
+    {
+        currentRotationValue = NormalizeRotation(currentRotationValue + 90);
+
+        if (rectTransform != null)
+        {
+            rectTransform.localRotation = Quaternion.Euler(0f, 0f, currentRotationValue);
+        }
+
+        return currentRotationValue;
+    }
+
+    public int GetNormalizedRotationValue()
+    {
+        return NormalizeRotation(currentRotationValue);
+    }
+
     private void ResolveReferences()
     {
         if (pieceImage == null)
@@ -72,5 +89,17 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         {
             rectTransform = transform as RectTransform;
         }
+    }
+
+    private static int NormalizeRotation(int rotationValue)
+    {
+        int normalizedValue = rotationValue % 360;
+
+        if (normalizedValue < 0)
+        {
+            normalizedValue += 360;
+        }
+
+        return normalizedValue;
     }
 }
