@@ -271,17 +271,21 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             return;
         }
 
+        Vector2 originalAnchorMin = pieceRectTransform.anchorMin;
+        Vector2 originalAnchorMax = pieceRectTransform.anchorMax;
+        Vector2 originalPivot = pieceRectTransform.pivot;
+        Vector2 originalSizeDelta = pieceRectTransform.sizeDelta;
         RectTransform parentRectTransform = spawnPoint.parent as RectTransform;
         if (parentRectTransform != null)
         {
             pieceRectTransform.SetParent(parentRectTransform, false);
         }
 
-        pieceRectTransform.anchorMin = spawnPoint.anchorMin;
-        pieceRectTransform.anchorMax = spawnPoint.anchorMax;
-        pieceRectTransform.pivot = spawnPoint.pivot;
-        pieceRectTransform.anchoredPosition = spawnPoint.anchoredPosition;
-        pieceRectTransform.sizeDelta = spawnPoint.sizeDelta;
+        pieceRectTransform.anchorMin = originalAnchorMin;
+        pieceRectTransform.anchorMax = originalAnchorMax;
+        pieceRectTransform.pivot = originalPivot;
+        pieceRectTransform.sizeDelta = originalSizeDelta;
+        pieceRectTransform.position = spawnPoint.position;
         pieceRectTransform.localScale = Vector3.one;
     }
 

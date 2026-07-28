@@ -1397,7 +1397,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::sh_PuzzleBoardController
   rotationRandomizer: {fileID: 1793379183}
-  puzzlePiecePrefab: {fileID: 1008278533695244827, guid: 571a90c29c291b846a7b98c52a1a5657, type: 3}
+  puzzlePiecePrefab: {fileID: 1010353291822410055, guid: 82fc94b11be4314408b5203053a50b3e, type: 3}
   pieceSpawnRoot: {fileID: 2090023954}
   pieceSpawnPoints:
   - {fileID: 650133612}
