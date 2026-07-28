@@ -17,6 +17,8 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
     private RectTransform dragParentRectTransform;
     private sh_PuzzleSlot currentSlot;
     private sh_PuzzleSlot previousSlotBeforeDrag;
+    private RectTransform currentSpawnPoint;
+    private RectTransform previousSpawnPointBeforeDrag;
     private Vector3 returnWorldPosition;
     private Vector3 pointerToPieceOffset;
     private Vector2 pointerDownScreenPosition;
@@ -27,6 +29,8 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
     public RectTransform RectTransform => rectTransform;
     public sh_PuzzleSlot CurrentSlot => currentSlot;
     public sh_PuzzleSlot PreviousSlotBeforeDrag => previousSlotBeforeDrag;
+    public RectTransform CurrentSpawnPoint => currentSpawnPoint;
+    public RectTransform PreviousSpawnPointBeforeDrag => previousSpawnPointBeforeDrag;
     public bool IsLocked => isLocked;
     public bool IsPlacedCorrectly => isPlacedCorrectly;
 
@@ -50,6 +54,8 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
         SetPlacedCorrectly(false);
         currentSlot = null;
         previousSlotBeforeDrag = null;
+        currentSpawnPoint = null;
+        previousSpawnPointBeforeDrag = null;
         didDragThisPress = false;
     }
 
@@ -73,6 +79,7 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
 
         didDragThisPress = true;
         previousSlotBeforeDrag = currentSlot;
+        previousSpawnPointBeforeDrag = currentSpawnPoint;
         originalSiblingIndex = rectTransform.GetSiblingIndex();
         rectTransform.SetAsLastSibling();
         UpdatePointerOffset(eventData);
@@ -173,6 +180,7 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
     public void AssignToSlot(sh_PuzzleSlot slot)
     {
         currentSlot = slot;
+        currentSpawnPoint = null;
 
         if (rectTransform == null || slot?.RectTransform == null)
         {
@@ -183,14 +191,38 @@ public sealed class sh_PuzzleDragHandler : MonoBehaviour, IPointerDownHandler, I
         CaptureCurrentPositionAsReturnPosition();
     }
 
+    public void AssignToSpawnPoint(RectTransform spawnPoint)
+    {
+        currentSpawnPoint = spawnPoint;
+        currentSlot = null;
+
+        if (rectTransform == null || spawnPoint == null)
+        {
+            return;
+        }
+
+        rectTransform.position = spawnPoint.position;
+        CaptureCurrentPositionAsReturnPosition();
+    }
+
     public void ClearCurrentSlot()
     {
         currentSlot = null;
     }
 
+    public void ClearCurrentSpawnPoint()
+    {
+        currentSpawnPoint = null;
+    }
+
     public void ClearPreviousSlotReference()
     {
         previousSlotBeforeDrag = null;
+    }
+
+    public void ClearPreviousSpawnPointReference()
+    {
+        previousSpawnPointBeforeDrag = null;
     }
 
     public void SetLocked(bool shouldLock)

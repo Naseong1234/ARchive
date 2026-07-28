@@ -34,6 +34,7 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
 
     private readonly List<Sprite> runtimeSprites = new();
     private readonly List<Texture2D> runtimeTextures = new();
+    private sh_PuzzlePieceUI[] spawnPointOccupants;
 
     private void Awake()
     {
@@ -95,6 +96,8 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
 
         ClearSpawnedPieces();
         ClearAllSlotOccupancy();
+        EnsureSpawnPointOccupancyArray();
+        ClearAllSpawnPointOccupancy();
         hasInvokedPuzzleCompleted = false;
 
         generatedPieceData = new List<sh_PuzzlePieceData>(rotationResult.PieceDataList);
@@ -115,8 +118,12 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
 
             sh_PuzzlePieceUI pieceInstance = Instantiate(puzzlePiecePrefab, pieceSpawnRoot);
             pieceInstance.Configure(pieceData, pieceSprite);
-            ApplySpawnPointLayout(pieceInstance.RectTransform, pieceSpawnPoints[shuffledSpawnPointIndexes[index]]);
-            ConfigureDragHandler(pieceInstance);
+            int spawnPointIndex = shuffledSpawnPointIndexes[index];
+            RectTransform spawnPoint = pieceSpawnPoints[spawnPointIndex];
+            ApplySpawnPointLayout(pieceInstance.RectTransform, spawnPoint);
+            sh_PuzzleDragHandler dragHandler = ConfigureDragHandler(pieceInstance);
+            dragHandler.AssignToSpawnPoint(spawnPoint);
+            SetSpawnPointOccupant(spawnPoint, pieceInstance);
             spawnedPieces.Add(pieceInstance);
         }
 
@@ -158,13 +165,25 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         }
 
         sh_PuzzleSlot currentSlot = dragHandler.CurrentSlot;
-        if (currentSlot == null)
+        RectTransform currentSpawnPoint = dragHandler.CurrentSpawnPoint;
+
+        if (currentSlot == null && currentSpawnPoint == null)
         {
             return;
         }
 
-        currentSlot.ClearPiece(dragHandler.PuzzlePieceUI);
-        dragHandler.ClearCurrentSlot();
+        if (currentSlot != null)
+        {
+            currentSlot.ClearPiece(dragHandler.PuzzlePieceUI);
+            dragHandler.ClearCurrentSlot();
+        }
+
+        if (currentSpawnPoint != null)
+        {
+            ClearSpawnPointOccupant(currentSpawnPoint, dragHandler.PuzzlePieceUI);
+            dragHandler.ClearCurrentSpawnPoint();
+        }
+
         dragHandler.SetPlacedCorrectly(false);
     }
 
@@ -175,25 +194,19 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             return;
         }
 
-        if (!TryFindNearestAvailableSlot(dragHandler.RectTransform.position, out sh_PuzzleSlot nearestSlot))
+        if (TryFindNearestSlot(dragHandler.RectTransform.position, out sh_PuzzleSlot nearestSlot))
         {
-            RestorePieceToPreviousPlacement(dragHandler);
+            PlacePieceOnSlot(dragHandler, nearestSlot);
             return;
         }
 
-        nearestSlot.AssignPiece(dragHandler.PuzzlePieceUI);
-        dragHandler.AssignToSlot(nearestSlot);
-        dragHandler.ClearPreviousSlotReference();
-
-        bool isCorrectPlacement = IsCorrectPlacement(dragHandler.PuzzlePieceUI, nearestSlot);
-        dragHandler.SetPlacedCorrectly(isCorrectPlacement);
-
-        if (isCorrectPlacement && lockPieceWhenPlacedCorrectly)
+        if (TryFindNearestAvailableSpawnPoint(dragHandler.RectTransform.position, out RectTransform nearestSpawnPoint))
         {
-            dragHandler.SetLocked(true);
+            PlacePieceOnSpawnPoint(dragHandler, nearestSpawnPoint);
+            return;
         }
 
-        EvaluatePuzzleCompletion();
+        RestorePieceToPreviousPlacement(dragHandler);
     }
 
     public void HandlePieceTapped(sh_PuzzleDragHandler dragHandler)
@@ -302,6 +315,7 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             }
         }
 
+        EnsureSpawnPointOccupancyArray();
         return true;
     }
 
@@ -400,11 +414,11 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         pieceRectTransform.localScale = Vector3.one;
     }
 
-    private void ConfigureDragHandler(sh_PuzzlePieceUI pieceInstance)
+    private sh_PuzzleDragHandler ConfigureDragHandler(sh_PuzzlePieceUI pieceInstance)
     {
         if (pieceInstance == null)
         {
-            return;
+            return null;
         }
 
         sh_PuzzleDragHandler dragHandler = pieceInstance.GetComponent<sh_PuzzleDragHandler>();
@@ -414,9 +428,10 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         }
 
         dragHandler.Initialize(this);
+        return dragHandler;
     }
 
-    private bool TryFindNearestAvailableSlot(Vector3 pieceWorldPosition, out sh_PuzzleSlot nearestSlot)
+    private bool TryFindNearestSlot(Vector3 pieceWorldPosition, out sh_PuzzleSlot nearestSlot)
     {
         nearestSlot = null;
         float nearestDistance = float.MaxValue;
@@ -424,7 +439,13 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         for (int index = 0; index < puzzleSlots.Length; index++)
         {
             sh_PuzzleSlot slot = puzzleSlots[index];
-            if (slot == null || slot.RectTransform == null || slot.IsOccupied)
+            if (slot == null || slot.RectTransform == null)
+            {
+                continue;
+            }
+
+            sh_PuzzleDragHandler occupantDragHandler = GetDragHandler(slot.CurrentPiece);
+            if (occupantDragHandler != null && occupantDragHandler.IsLocked)
             {
                 continue;
             }
@@ -440,6 +461,34 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         }
 
         return nearestSlot != null;
+    }
+
+    private bool TryFindNearestAvailableSpawnPoint(Vector3 pieceWorldPosition, out RectTransform nearestSpawnPoint)
+    {
+        nearestSpawnPoint = null;
+        float nearestDistance = float.MaxValue;
+
+        EnsureSpawnPointOccupancyArray();
+
+        for (int index = 0; index < pieceSpawnPoints.Length; index++)
+        {
+            RectTransform spawnPoint = pieceSpawnPoints[index];
+            if (spawnPoint == null || spawnPointOccupants[index] != null)
+            {
+                continue;
+            }
+
+            float distance = Vector2.Distance(pieceWorldPosition, spawnPoint.position);
+            if (distance > slotSnapDistance || distance >= nearestDistance)
+            {
+                continue;
+            }
+
+            nearestDistance = distance;
+            nearestSpawnPoint = spawnPoint;
+        }
+
+        return nearestSpawnPoint != null;
     }
 
     private void RestorePieceToPreviousPlacement(sh_PuzzleDragHandler dragHandler)
@@ -458,11 +507,24 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             bool isCorrectPlacement = IsCorrectPlacement(dragHandler.PuzzlePieceUI, previousSlot);
             dragHandler.SetPlacedCorrectly(isCorrectPlacement);
             dragHandler.ClearPreviousSlotReference();
+            dragHandler.ClearPreviousSpawnPointReference();
+            return;
+        }
+
+        RectTransform previousSpawnPoint = dragHandler.PreviousSpawnPointBeforeDrag;
+        if (previousSpawnPoint != null && GetSpawnPointOccupant(previousSpawnPoint) == null)
+        {
+            SetSpawnPointOccupant(previousSpawnPoint, dragHandler.PuzzlePieceUI);
+            dragHandler.AssignToSpawnPoint(previousSpawnPoint);
+            dragHandler.SetPlacedCorrectly(false);
+            dragHandler.ClearPreviousSlotReference();
+            dragHandler.ClearPreviousSpawnPointReference();
             return;
         }
 
         dragHandler.ReturnToStoredPosition();
         dragHandler.ClearPreviousSlotReference();
+        dragHandler.ClearPreviousSpawnPointReference();
         dragHandler.SetPlacedCorrectly(false);
     }
 
@@ -511,6 +573,16 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             }
 
             puzzleSlots[index].ClearPiece();
+        }
+    }
+
+    private void ClearAllSpawnPointOccupancy()
+    {
+        EnsureSpawnPointOccupancyArray();
+
+        for (int index = 0; index < spawnPointOccupants.Length; index++)
+        {
+            spawnPointOccupants[index] = null;
         }
     }
 
@@ -588,6 +660,165 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
     private void OnDestroy()
     {
         ClearRuntimeAssets();
+    }
+
+    private void PlacePieceOnSlot(sh_PuzzleDragHandler dragHandler, sh_PuzzleSlot targetSlot)
+    {
+        if (dragHandler == null || targetSlot == null)
+        {
+            return;
+        }
+
+        sh_PuzzlePieceUI movingPiece = dragHandler.PuzzlePieceUI;
+        sh_PuzzlePieceUI targetPiece = targetSlot.CurrentPiece;
+        sh_PuzzleDragHandler targetDragHandler = GetDragHandler(targetPiece);
+
+        if (targetDragHandler != null && targetDragHandler.IsLocked)
+        {
+            RestorePieceToPreviousPlacement(dragHandler);
+            return;
+        }
+
+        if (targetDragHandler != null && targetPiece != null && targetPiece != movingPiece)
+        {
+            MovePieceToPreviousPlacement(targetDragHandler, dragHandler);
+        }
+
+        targetSlot.AssignPiece(movingPiece);
+        dragHandler.AssignToSlot(targetSlot);
+        dragHandler.ClearPreviousSlotReference();
+        dragHandler.ClearPreviousSpawnPointReference();
+
+        bool isCorrectPlacement = IsCorrectPlacement(movingPiece, targetSlot);
+        dragHandler.SetPlacedCorrectly(isCorrectPlacement);
+
+        if (isCorrectPlacement && lockPieceWhenPlacedCorrectly)
+        {
+            dragHandler.SetLocked(true);
+        }
+
+        EvaluatePuzzleCompletion();
+    }
+
+    private void PlacePieceOnSpawnPoint(sh_PuzzleDragHandler dragHandler, RectTransform spawnPoint)
+    {
+        if (dragHandler == null || spawnPoint == null)
+        {
+            return;
+        }
+
+        SetSpawnPointOccupant(spawnPoint, dragHandler.PuzzlePieceUI);
+        dragHandler.AssignToSpawnPoint(spawnPoint);
+        dragHandler.SetPlacedCorrectly(false);
+        dragHandler.ClearPreviousSlotReference();
+        dragHandler.ClearPreviousSpawnPointReference();
+    }
+
+    private void MovePieceToPreviousPlacement(sh_PuzzleDragHandler targetDragHandler, sh_PuzzleDragHandler sourceDragHandler)
+    {
+        if (targetDragHandler == null)
+        {
+            return;
+        }
+
+        sh_PuzzleSlot sourcePreviousSlot = sourceDragHandler.PreviousSlotBeforeDrag;
+        RectTransform sourcePreviousSpawnPoint = sourceDragHandler.PreviousSpawnPointBeforeDrag;
+
+        if (sourcePreviousSlot != null)
+        {
+            sourcePreviousSlot.AssignPiece(targetDragHandler.PuzzlePieceUI);
+            targetDragHandler.AssignToSlot(sourcePreviousSlot);
+            bool isCorrectPlacement = IsCorrectPlacement(targetDragHandler.PuzzlePieceUI, sourcePreviousSlot);
+            targetDragHandler.SetPlacedCorrectly(isCorrectPlacement);
+            return;
+        }
+
+        if (sourcePreviousSpawnPoint != null)
+        {
+            SetSpawnPointOccupant(sourcePreviousSpawnPoint, targetDragHandler.PuzzlePieceUI);
+            targetDragHandler.AssignToSpawnPoint(sourcePreviousSpawnPoint);
+            targetDragHandler.SetPlacedCorrectly(false);
+            return;
+        }
+
+        targetDragHandler.ReturnToStoredPosition();
+        targetDragHandler.SetPlacedCorrectly(false);
+    }
+
+    private void EnsureSpawnPointOccupancyArray()
+    {
+        if (pieceSpawnPoints == null)
+        {
+            spawnPointOccupants = Array.Empty<sh_PuzzlePieceUI>();
+            return;
+        }
+
+        if (spawnPointOccupants == null || spawnPointOccupants.Length != pieceSpawnPoints.Length)
+        {
+            spawnPointOccupants = new sh_PuzzlePieceUI[pieceSpawnPoints.Length];
+        }
+    }
+
+    private void SetSpawnPointOccupant(RectTransform spawnPoint, sh_PuzzlePieceUI pieceUI)
+    {
+        int index = FindSpawnPointIndex(spawnPoint);
+        if (index < 0)
+        {
+            return;
+        }
+
+        EnsureSpawnPointOccupancyArray();
+        spawnPointOccupants[index] = pieceUI;
+    }
+
+    private void ClearSpawnPointOccupant(RectTransform spawnPoint, sh_PuzzlePieceUI pieceUI)
+    {
+        int index = FindSpawnPointIndex(spawnPoint);
+        if (index < 0)
+        {
+            return;
+        }
+
+        EnsureSpawnPointOccupancyArray();
+        if (spawnPointOccupants[index] == pieceUI)
+        {
+            spawnPointOccupants[index] = null;
+        }
+    }
+
+    private sh_PuzzlePieceUI GetSpawnPointOccupant(RectTransform spawnPoint)
+    {
+        int index = FindSpawnPointIndex(spawnPoint);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        EnsureSpawnPointOccupancyArray();
+        return spawnPointOccupants[index];
+    }
+
+    private int FindSpawnPointIndex(RectTransform spawnPoint)
+    {
+        if (spawnPoint == null || pieceSpawnPoints == null)
+        {
+            return -1;
+        }
+
+        for (int index = 0; index < pieceSpawnPoints.Length; index++)
+        {
+            if (pieceSpawnPoints[index] == spawnPoint)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static sh_PuzzleDragHandler GetDragHandler(sh_PuzzlePieceUI pieceUI)
+    {
+        return pieceUI != null ? pieceUI.GetComponent<sh_PuzzleDragHandler>() : null;
     }
 
     private static bool IsCorrectPlacement(sh_PuzzlePieceUI pieceUI, sh_PuzzleSlot slot)

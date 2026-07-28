@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -205,11 +206,11 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         int[] widths = BuildSegmentSizes(sourceTexture.width, sliceGridSize);
         int[] heights = BuildSegmentSizes(sourceTexture.height, sliceGridSize);
         string[] savedPaths = new string[sliceGridSize * sliceGridSize];
-        int startY = 0;
         int pieceIndex = 0;
 
         for (int row = 0; row < sliceGridSize; row++)
         {
+            int startY = GetStartYFromTop(heights, row);
             int startX = 0;
 
             for (int column = 0; column < sliceGridSize; column++)
@@ -225,8 +226,6 @@ public sealed class sh_ImageSliceService : MonoBehaviour
                 startX += width;
                 pieceIndex++;
             }
-
-            startY += heights[row];
         }
 
         return savedPaths;
@@ -282,6 +281,24 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         }
 
         return segmentSizes;
+    }
+
+    private static int GetStartYFromTop(IReadOnlyList<int> heights, int rowFromTop)
+    {
+        int accumulatedHeight = 0;
+
+        for (int index = 0; index <= rowFromTop && index < heights.Count; index++)
+        {
+            accumulatedHeight += heights[index];
+        }
+
+        int totalHeight = 0;
+        for (int index = 0; index < heights.Count; index++)
+        {
+            totalHeight += heights[index];
+        }
+
+        return totalHeight - accumulatedHeight;
     }
 
     private static void ClearPngFiles(string directoryPath)
