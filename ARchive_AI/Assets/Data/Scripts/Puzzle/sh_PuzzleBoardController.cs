@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Events;
 
 public sealed class sh_PuzzleBoardController : MonoBehaviour
 {
@@ -11,6 +12,7 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
     [SerializeField] private RectTransform pieceSpawnRoot;
     [SerializeField] private RectTransform[] pieceSpawnPoints = new RectTransform[9];
     [SerializeField] private sh_PuzzleSlot[] puzzleSlots = new sh_PuzzleSlot[9];
+    [SerializeField] private Canvas puzzleCanvas;
 
     [Header("Board Settings")]
     [SerializeField] private bool generateOnStart = true;
@@ -18,11 +20,17 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
     [SerializeField] private bool clearExistingPiecesOnGenerate = true;
     [SerializeField] private int expectedPieceCount = 9;
     [SerializeField] private float spritePixelsPerUnit = 100f;
+    [SerializeField] private float slotSnapDistance = 120f;
+    [SerializeField] private bool lockPieceWhenPlacedCorrectly = true;
+
+    [Header("Events")]
+    [SerializeField] private UnityEvent onPuzzleCompleted;
 
     [Header("Debug Data")]
     [SerializeField] private string rotatingPieceDirectoryPath = string.Empty;
     [SerializeField] private List<sh_PuzzlePieceData> generatedPieceData = new();
     [SerializeField] private List<sh_PuzzlePieceUI> spawnedPieces = new();
+    [SerializeField] private bool hasInvokedPuzzleCompleted;
 
     private readonly List<Sprite> runtimeSprites = new();
     private readonly List<Texture2D> runtimeTextures = new();
@@ -86,8 +94,12 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         }
 
         ClearSpawnedPieces();
+        ClearAllSlotOccupancy();
+        hasInvokedPuzzleCompleted = false;
+
         generatedPieceData = new List<sh_PuzzlePieceData>(rotationResult.PieceDataList);
         int[] shuffledSpawnPointIndexes = CreateShuffledIndexes(pieceSpawnPoints.Length);
+        bool didFailToGenerateAllPieces = false;
 
         for (int index = 0; index < generatedPieceData.Count; index++)
         {
@@ -97,13 +109,27 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             if (pieceSprite == null)
             {
                 Debug.LogError($"{nameof(sh_PuzzleBoardController)}: 조각 이미지를 스프라이트로 변환하지 못했습니다.\n{pieceData.ImagePath}", this);
+                didFailToGenerateAllPieces = true;
                 continue;
             }
 
             sh_PuzzlePieceUI pieceInstance = Instantiate(puzzlePiecePrefab, pieceSpawnRoot);
             pieceInstance.Configure(pieceData, pieceSprite);
             ApplySpawnPointLayout(pieceInstance.RectTransform, pieceSpawnPoints[shuffledSpawnPointIndexes[index]]);
+            ConfigureDragHandler(pieceInstance);
             spawnedPieces.Add(pieceInstance);
+        }
+
+        if (didFailToGenerateAllPieces || spawnedPieces.Count != expectedPieceCount)
+        {
+            Debug.LogError(
+                $"{nameof(sh_PuzzleBoardController)}: 퍼즐 UI를 완전하게 생성하지 못했습니다.\n" +
+                $"예상 조각 수: {expectedPieceCount}\n" +
+                $"실제 생성 수: {spawnedPieces.Count}",
+                this);
+            ClearSpawnedPieces();
+            ClearAllSlotOccupancy();
+            return;
         }
 
         Debug.Log(
@@ -124,6 +150,54 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         return puzzleSlots;
     }
 
+    public void HandlePieceBeginDrag(sh_PuzzleDragHandler dragHandler)
+    {
+        if (dragHandler == null)
+        {
+            return;
+        }
+
+        sh_PuzzleSlot currentSlot = dragHandler.CurrentSlot;
+        if (currentSlot == null)
+        {
+            return;
+        }
+
+        currentSlot.ClearPiece(dragHandler.PuzzlePieceUI);
+        dragHandler.ClearCurrentSlot();
+        dragHandler.SetPlacedCorrectly(false);
+    }
+
+    public void HandlePieceEndDrag(sh_PuzzleDragHandler dragHandler)
+    {
+        if (dragHandler == null)
+        {
+            return;
+        }
+
+        if (!TryFindNearestAvailableSlot(dragHandler.RectTransform.position, out sh_PuzzleSlot nearestSlot))
+        {
+            RestorePieceToPreviousPlacement(dragHandler);
+            return;
+        }
+
+        nearestSlot.AssignPiece(dragHandler.PuzzlePieceUI);
+        dragHandler.AssignToSlot(nearestSlot);
+        dragHandler.ClearPreviousSlotReference();
+
+        bool isCorrectSlot = dragHandler.PuzzlePieceUI != null &&
+            dragHandler.PuzzlePieceUI.AnswerSlotNumber == nearestSlot.SlotNumber;
+
+        dragHandler.SetPlacedCorrectly(isCorrectSlot);
+
+        if (isCorrectSlot && lockPieceWhenPlacedCorrectly)
+        {
+            dragHandler.SetLocked(true);
+        }
+
+        EvaluatePuzzleCompletion();
+    }
+
     private void ResolveReferences()
     {
         if (rotationRandomizer == null)
@@ -134,6 +208,11 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         if (pieceSpawnRoot == null)
         {
             pieceSpawnRoot = transform as RectTransform;
+        }
+
+        if (puzzleCanvas == null)
+        {
+            puzzleCanvas = GetComponentInParent<Canvas>();
         }
 
         if (string.IsNullOrWhiteSpace(rotatingPieceDirectoryPath))
@@ -159,6 +238,12 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         if (pieceSpawnRoot == null)
         {
             Debug.LogError($"{nameof(sh_PuzzleBoardController)}: 조각을 생성할 부모 RectTransform이 필요합니다.", this);
+            return false;
+        }
+
+        if (puzzleCanvas == null)
+        {
+            Debug.LogError($"{nameof(sh_PuzzleBoardController)}: 드래그용 Canvas 참조가 필요합니다.", this);
             return false;
         }
 
@@ -276,6 +361,7 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         Vector2 originalPivot = pieceRectTransform.pivot;
         Vector2 originalSizeDelta = pieceRectTransform.sizeDelta;
         RectTransform parentRectTransform = spawnPoint.parent as RectTransform;
+
         if (parentRectTransform != null)
         {
             pieceRectTransform.SetParent(parentRectTransform, false);
@@ -287,6 +373,121 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
         pieceRectTransform.sizeDelta = originalSizeDelta;
         pieceRectTransform.position = spawnPoint.position;
         pieceRectTransform.localScale = Vector3.one;
+    }
+
+    private void ConfigureDragHandler(sh_PuzzlePieceUI pieceInstance)
+    {
+        if (pieceInstance == null)
+        {
+            return;
+        }
+
+        sh_PuzzleDragHandler dragHandler = pieceInstance.GetComponent<sh_PuzzleDragHandler>();
+        if (dragHandler == null)
+        {
+            dragHandler = pieceInstance.gameObject.AddComponent<sh_PuzzleDragHandler>();
+        }
+
+        dragHandler.Initialize(this);
+    }
+
+    private bool TryFindNearestAvailableSlot(Vector3 pieceWorldPosition, out sh_PuzzleSlot nearestSlot)
+    {
+        nearestSlot = null;
+        float nearestDistance = float.MaxValue;
+
+        for (int index = 0; index < puzzleSlots.Length; index++)
+        {
+            sh_PuzzleSlot slot = puzzleSlots[index];
+            if (slot == null || slot.RectTransform == null || slot.IsOccupied)
+            {
+                continue;
+            }
+
+            float distance = Vector2.Distance(pieceWorldPosition, slot.RectTransform.position);
+            if (distance > slotSnapDistance || distance >= nearestDistance)
+            {
+                continue;
+            }
+
+            nearestDistance = distance;
+            nearestSlot = slot;
+        }
+
+        return nearestSlot != null;
+    }
+
+    private void RestorePieceToPreviousPlacement(sh_PuzzleDragHandler dragHandler)
+    {
+        if (dragHandler == null)
+        {
+            return;
+        }
+
+        sh_PuzzleSlot previousSlot = dragHandler.PreviousSlotBeforeDrag;
+        if (previousSlot != null && previousSlot.CanAssign(dragHandler.PuzzlePieceUI))
+        {
+            previousSlot.AssignPiece(dragHandler.PuzzlePieceUI);
+            dragHandler.AssignToSlot(previousSlot);
+
+            bool isCorrectSlot = dragHandler.PuzzlePieceUI != null &&
+                dragHandler.PuzzlePieceUI.AnswerSlotNumber == previousSlot.SlotNumber;
+            dragHandler.SetPlacedCorrectly(isCorrectSlot);
+            dragHandler.ClearPreviousSlotReference();
+            return;
+        }
+
+        dragHandler.ReturnToStoredPosition();
+        dragHandler.ClearPreviousSlotReference();
+        dragHandler.SetPlacedCorrectly(false);
+    }
+
+    private void EvaluatePuzzleCompletion()
+    {
+        if (hasInvokedPuzzleCompleted)
+        {
+            return;
+        }
+
+        int correctCount = 0;
+
+        for (int index = 0; index < puzzleSlots.Length; index++)
+        {
+            sh_PuzzleSlot slot = puzzleSlots[index];
+            if (slot?.CurrentPiece == null)
+            {
+                return;
+            }
+
+            if (slot.CurrentPiece.AnswerSlotNumber != slot.SlotNumber)
+            {
+                return;
+            }
+
+            correctCount++;
+        }
+
+        if (correctCount != expectedPieceCount)
+        {
+            return;
+        }
+
+        hasInvokedPuzzleCompleted = true;
+        Debug.Log($"{nameof(sh_PuzzleBoardController)}: 퍼즐 완료 판정 성공.", this);
+        onPuzzleCompleted?.Invoke();
+    }
+
+    private void ClearAllSlotOccupancy()
+    {
+        for (int index = 0; index < puzzleSlots.Length; index++)
+        {
+            if (puzzleSlots[index] == null)
+            {
+                continue;
+            }
+
+            puzzleSlots[index].ClearPiece();
+        }
     }
 
     private void ClearSpawnedPieces()

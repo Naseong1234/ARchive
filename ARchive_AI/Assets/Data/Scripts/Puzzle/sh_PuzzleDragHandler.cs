@@ -1,0 +1,240 @@
+using UnityEngine;
+using UnityEngine.EventSystems;
+
+public sealed class sh_PuzzleDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+{
+    [Header("Runtime References")]
+    [SerializeField] private sh_PuzzlePieceUI puzzlePieceUI;
+    [SerializeField] private RectTransform rectTransform;
+    [SerializeField] private CanvasGroup canvasGroup;
+
+    [Header("Debug Data")]
+    [SerializeField] private bool isLocked;
+    [SerializeField] private bool isPlacedCorrectly;
+
+    private sh_PuzzleBoardController puzzleBoardController;
+    private RectTransform dragParentRectTransform;
+    private sh_PuzzleSlot currentSlot;
+    private sh_PuzzleSlot previousSlotBeforeDrag;
+    private Vector3 returnWorldPosition;
+    private Vector3 pointerToPieceOffset;
+    private int originalSiblingIndex;
+
+    public sh_PuzzlePieceUI PuzzlePieceUI => puzzlePieceUI;
+    public RectTransform RectTransform => rectTransform;
+    public sh_PuzzleSlot CurrentSlot => currentSlot;
+    public sh_PuzzleSlot PreviousSlotBeforeDrag => previousSlotBeforeDrag;
+    public bool IsLocked => isLocked;
+    public bool IsPlacedCorrectly => isPlacedCorrectly;
+
+    private void Awake()
+    {
+        ResolveReferences();
+    }
+
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
+    public void Initialize(sh_PuzzleBoardController boardController)
+    {
+        ResolveReferences();
+        puzzleBoardController = boardController;
+        dragParentRectTransform = rectTransform.parent as RectTransform;
+        CaptureCurrentPositionAsReturnPosition();
+        SetLocked(false);
+        SetPlacedCorrectly(false);
+        currentSlot = null;
+        previousSlotBeforeDrag = null;
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (isLocked || puzzleBoardController == null)
+        {
+            return;
+        }
+
+        previousSlotBeforeDrag = currentSlot;
+        originalSiblingIndex = rectTransform.GetSiblingIndex();
+        rectTransform.SetAsLastSibling();
+        UpdatePointerOffset(eventData);
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.blocksRaycasts = false;
+        }
+
+        puzzleBoardController.HandlePieceBeginDrag(this);
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (isLocked || rectTransform == null)
+        {
+            return;
+        }
+
+        RectTransform parentRectTransform = dragParentRectTransform != null
+            ? dragParentRectTransform
+            : rectTransform.parent as RectTransform;
+
+        if (parentRectTransform == null)
+        {
+            return;
+        }
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            parentRectTransform,
+            eventData.position,
+            eventData.pressEventCamera,
+            out _))
+        {
+            if (RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                parentRectTransform,
+                eventData.position,
+                eventData.pressEventCamera,
+                out Vector3 worldPoint))
+            {
+                rectTransform.position = worldPoint + pointerToPieceOffset;
+            }
+        }
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (isLocked)
+        {
+            return;
+        }
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.blocksRaycasts = true;
+        }
+
+        rectTransform.SetSiblingIndex(originalSiblingIndex);
+
+        if (puzzleBoardController == null)
+        {
+            ReturnToStoredPosition();
+            return;
+        }
+
+        puzzleBoardController.HandlePieceEndDrag(this);
+    }
+
+    public void CaptureCurrentPositionAsReturnPosition()
+    {
+        if (rectTransform != null)
+        {
+            returnWorldPosition = rectTransform.position;
+        }
+    }
+
+    public void ReturnToStoredPosition()
+    {
+        if (rectTransform != null)
+        {
+            rectTransform.position = returnWorldPosition;
+        }
+    }
+
+    public void AssignToSlot(sh_PuzzleSlot slot)
+    {
+        currentSlot = slot;
+
+        if (rectTransform == null || slot?.RectTransform == null)
+        {
+            return;
+        }
+
+        rectTransform.position = slot.RectTransform.position;
+        CaptureCurrentPositionAsReturnPosition();
+    }
+
+    public void ClearCurrentSlot()
+    {
+        currentSlot = null;
+    }
+
+    public void ClearPreviousSlotReference()
+    {
+        previousSlotBeforeDrag = null;
+    }
+
+    public void SetLocked(bool shouldLock)
+    {
+        isLocked = shouldLock;
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.blocksRaycasts = !shouldLock;
+        }
+    }
+
+    public void SetPlacedCorrectly(bool isCorrect)
+    {
+        isPlacedCorrectly = isCorrect;
+
+        if (puzzlePieceUI != null)
+        {
+            puzzlePieceUI.SetCorrectState(isCorrect);
+        }
+    }
+
+    private void ResolveReferences()
+    {
+        if (puzzlePieceUI == null)
+        {
+            puzzlePieceUI = GetComponent<sh_PuzzlePieceUI>();
+        }
+
+        if (rectTransform == null)
+        {
+            rectTransform = transform as RectTransform;
+        }
+
+        if (canvasGroup == null)
+        {
+            canvasGroup = GetComponent<CanvasGroup>();
+        }
+
+        if (canvasGroup == null)
+        {
+            canvasGroup = gameObject.AddComponent<CanvasGroup>();
+        }
+    }
+
+    private void UpdatePointerOffset(PointerEventData eventData)
+    {
+        if (rectTransform == null)
+        {
+            pointerToPieceOffset = Vector3.zero;
+            return;
+        }
+
+        RectTransform parentRectTransform = dragParentRectTransform != null
+            ? dragParentRectTransform
+            : rectTransform.parent as RectTransform;
+
+        if (parentRectTransform == null)
+        {
+            pointerToPieceOffset = Vector3.zero;
+            return;
+        }
+
+        if (RectTransformUtility.ScreenPointToWorldPointInRectangle(
+            parentRectTransform,
+            eventData.position,
+            eventData.pressEventCamera,
+            out Vector3 worldPoint))
+        {
+            pointerToPieceOffset = rectTransform.position - worldPoint;
+            return;
+        }
+
+        pointerToPieceOffset = Vector3.zero;
+    }
+}

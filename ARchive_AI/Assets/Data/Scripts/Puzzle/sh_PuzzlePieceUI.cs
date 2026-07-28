@@ -10,11 +10,13 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
     [Header("Debug Data")]
     [SerializeField] private int answerSlotNumber;
     [SerializeField] private int currentRotationValue;
+    [SerializeField] private bool isPlacedCorrectly;
 
     public Image PieceImage => pieceImage;
     public RectTransform RectTransform => rectTransform;
     public int AnswerSlotNumber => answerSlotNumber;
     public int CurrentRotationValue => currentRotationValue;
+    public bool IsPlacedCorrectly => isPlacedCorrectly;
 
     private void Awake()
     {
@@ -38,6 +40,7 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
 
         answerSlotNumber = pieceData.AnswerSlotNumber;
         currentRotationValue = pieceData.CurrentRotationValue;
+        isPlacedCorrectly = false;
         gameObject.name = $"PuzzlePiece_{answerSlotNumber:00}";
 
         if (pieceImage != null)
@@ -51,6 +54,11 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         {
             rectTransform.localRotation = Quaternion.Euler(0f, 0f, currentRotationValue);
         }
+    }
+
+    public void SetCorrectState(bool isCorrect)
+    {
+        isPlacedCorrectly = isCorrect;
     }
 
     private void ResolveReferences()
