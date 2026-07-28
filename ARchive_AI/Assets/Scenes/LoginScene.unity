@@ -1120,8 +1120,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::sh_LoginSceneController
   attachFileButton: {fileID: 1482611819}
-  moveToMainButtonObject: {fileID: 0}
-  moveToMainButton: {fileID: 0}
+  moveToMainButtonObject: {fileID: 994806168}
+  moveToMainButton: {fileID: 994806170}
   statusText: {fileID: 1018857425}
   imagePickerService: {fileID: 1827754095}
   imageStorageService: {fileID: 1827754098}
