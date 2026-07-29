@@ -123,6 +123,13 @@ public sealed class sh_ImageStorageService : MonoBehaviour
         return true;
     }
 
+    public void ClearSavedImageRecord()
+    {
+        LastSavedFilePath = string.Empty;
+        PlayerPrefs.DeleteKey(SavedImagePathPlayerPrefsKey);
+        PlayerPrefs.Save();
+    }
+
     private string BuildFileName(string extension)
     {
         if (!appendSessionStamp)

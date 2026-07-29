@@ -195,6 +195,15 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         return true;
     }
 
+    public void ClearSelectedMarkerPieceRecord()
+    {
+        LastSelectedMarkerPiece = SelectedMarkerPieceData.CreateEmpty();
+        PlayerPrefs.DeleteKey(SelectedMarkerPieceIndexPlayerPrefsKey);
+        PlayerPrefs.DeleteKey(SelectedMarkerPiecePathPlayerPrefsKey);
+        PlayerPrefs.DeleteKey(SelectedMarkerPieceFileNamePlayerPrefsKey);
+        PlayerPrefs.Save();
+    }
+
     private SliceResult LogFailure(string sourceImagePath, string errorMessage)
     {
         Debug.LogError($"{nameof(sh_ImageSliceService)}: {errorMessage}", this);

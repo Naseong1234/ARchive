@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.yasirkula.nativegallery": "https://github.com/yasirkula/UnityNativeGallery.git",
+    "com.yasirkula.nativegallery": "file:com.yasirkula.nativegallery",
     "com.unity.ai.navigation": "2.0.13",
     "com.unity.collab-proxy": "2.12.4",
     "com.unity.ide.rider": "3.0.38",
