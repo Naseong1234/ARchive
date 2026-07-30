@@ -123,6 +123,19 @@ public sealed class sh_ImageStorageService : MonoBehaviour
         return true;
     }
 
+    public static bool TryLoadSavedImagePath(out string savedImagePath)
+    {
+        savedImagePath = PlayerPrefs.GetString(SavedImagePathPlayerPrefsKey, string.Empty);
+
+        if (string.IsNullOrWhiteSpace(savedImagePath) || !File.Exists(savedImagePath))
+        {
+            savedImagePath = string.Empty;
+            return false;
+        }
+
+        return true;
+    }
+
     public void ClearSavedImageRecord()
     {
         LastSavedFilePath = string.Empty;
