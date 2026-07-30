@@ -51,6 +51,7 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
             pieceImage.sprite = pieceSprite;
             pieceImage.preserveAspect = false;
             pieceImage.enabled = pieceSprite != null;
+            ApplyPieceImageVisibility(pieceImage, pieceSprite != null);
         }
 
         if (pieceImageAspectFitter != null)
@@ -111,7 +112,7 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
 
             if (pieceImage == inputImage)
             {
-                pieceImage = null;
+                pieceImage = inputImage;
             }
         }
 
@@ -124,6 +125,18 @@ public sealed class sh_PuzzlePieceUI : MonoBehaviour
         {
             pieceImageAspectFitter = pieceImage.GetComponent<AspectRatioFitter>();
         }
+    }
+
+    private static void ApplyPieceImageVisibility(Image targetImage, bool isVisible)
+    {
+        if (targetImage == null)
+        {
+            return;
+        }
+
+        Color imageColor = targetImage.color;
+        imageColor.a = isVisible ? 1f : 0f;
+        targetImage.color = imageColor;
     }
 
     private static int NormalizeRotation(int rotationValue)

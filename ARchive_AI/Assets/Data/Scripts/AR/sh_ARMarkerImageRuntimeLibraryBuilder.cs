@@ -16,10 +16,20 @@ public sealed class sh_ARMarkerImageRuntimeLibraryBuilder : MonoBehaviour
     [SerializeField] [Min(0.01f)] private float markerPhysicalWidthInMeters = 0.1f;
     [SerializeField] private bool assignRuntimeLibraryOnSuccess = true;
 
+    [Header("Marker Piece Preview")]
+    [SerializeField] private sh_PuzzlePieceUI markerPiecePrefab;
+    [SerializeField] private RectTransform markerPieceSpawnRoot;
+    [SerializeField] private RectTransform markerPieceSpawnPoint;
+    [SerializeField] private float spritePixelsPerUnit = 100f;
+
     [Header("Debug Data")]
     [SerializeField] private string lastMarkerImagePath = string.Empty;
     [SerializeField] private string lastMarkerImageName = string.Empty;
     [SerializeField] private AddReferenceImageJobStatus lastAddJobStatus = AddReferenceImageJobStatus.None;
+
+    private sh_PuzzlePieceUI markerPiecePreviewInstance;
+    private Sprite markerPiecePreviewSprite;
+    private Texture2D markerPiecePreviewTexture;
 
     private void Awake()
     {
@@ -166,6 +176,8 @@ public sealed class sh_ARMarkerImageRuntimeLibraryBuilder : MonoBehaviour
             trackingResultHandler.SetTargetReferenceImageName(lastMarkerImageName);
         }
 
+        CreateMarkerPiecePreview(markerPieceData.PiecePath);
+
         ReportDebugStatus($"마커 등록 완료, 트래킹 대기 중: {lastMarkerImageName}");
 
         Debug.Log(
@@ -226,6 +238,80 @@ public sealed class sh_ARMarkerImageRuntimeLibraryBuilder : MonoBehaviour
         }
     }
 
+    private void CreateMarkerPiecePreview(string markerImagePath)
+    {
+        if (markerPiecePrefab == null || markerPieceSpawnRoot == null || markerPieceSpawnPoint == null)
+        {
+            return;
+        }
+
+        ClearMarkerPiecePreview();
+
+        markerPiecePreviewSprite = CreateSpriteFromFile(markerImagePath, out markerPiecePreviewTexture);
+        if (markerPiecePreviewSprite == null)
+        {
+            Debug.LogWarning($"{nameof(sh_ARMarkerImageRuntimeLibraryBuilder)}: 마커 조각 미리보기 스프라이트를 만들지 못했습니다.", this);
+            return;
+        }
+
+        markerPiecePreviewInstance = Instantiate(markerPiecePrefab, markerPieceSpawnRoot);
+        markerPiecePreviewInstance.Configure(
+            new sh_PuzzlePieceData(1, 0, markerImagePath),
+            markerPiecePreviewSprite);
+
+        ApplySpawnPointLayout(markerPiecePreviewInstance.RectTransform, markerPieceSpawnPoint);
+    }
+
+    private void ApplySpawnPointLayout(RectTransform pieceRectTransform, RectTransform spawnPoint)
+    {
+        if (pieceRectTransform == null || spawnPoint == null)
+        {
+            return;
+        }
+
+        Vector2 originalAnchorMin = pieceRectTransform.anchorMin;
+        Vector2 originalAnchorMax = pieceRectTransform.anchorMax;
+        Vector2 originalPivot = pieceRectTransform.pivot;
+        Vector2 originalSizeDelta = pieceRectTransform.sizeDelta;
+        RectTransform parentRectTransform = spawnPoint.parent as RectTransform;
+
+        if (parentRectTransform != null)
+        {
+            pieceRectTransform.SetParent(parentRectTransform, false);
+        }
+
+        pieceRectTransform.anchorMin = originalAnchorMin;
+        pieceRectTransform.anchorMax = originalAnchorMax;
+        pieceRectTransform.pivot = originalPivot;
+        pieceRectTransform.sizeDelta = originalSizeDelta;
+        pieceRectTransform.position = spawnPoint.position;
+        pieceRectTransform.localScale = Vector3.one;
+    }
+
+    private Sprite CreateSpriteFromFile(string filePath, out Texture2D loadedTexture)
+    {
+        loadedTexture = null;
+
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return null;
+        }
+
+        loadedTexture = LoadTextureFromFile(filePath);
+        if (loadedTexture == null)
+        {
+            return null;
+        }
+
+        Sprite sprite = Sprite.Create(
+            loadedTexture,
+            new Rect(0f, 0f, loadedTexture.width, loadedTexture.height),
+            new Vector2(0.5f, 0.5f),
+            spritePixelsPerUnit);
+        sprite.name = loadedTexture.name;
+        return sprite;
+    }
+
     private static Texture2D LoadTextureFromFile(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -244,5 +330,26 @@ public sealed class sh_ARMarkerImageRuntimeLibraryBuilder : MonoBehaviour
 
         texture.name = Path.GetFileNameWithoutExtension(filePath);
         return texture;
+    }
+
+    private void ClearMarkerPiecePreview()
+    {
+        if (markerPiecePreviewInstance != null)
+        {
+            Destroy(markerPiecePreviewInstance.gameObject);
+            markerPiecePreviewInstance = null;
+        }
+
+        if (markerPiecePreviewSprite != null)
+        {
+            Destroy(markerPiecePreviewSprite);
+            markerPiecePreviewSprite = null;
+        }
+
+        if (markerPiecePreviewTexture != null)
+        {
+            Destroy(markerPiecePreviewTexture);
+            markerPiecePreviewTexture = null;
+        }
     }
 }

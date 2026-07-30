@@ -10,6 +10,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     [SerializeField] private Button attachFileButton;
     [SerializeField] private GameObject moveToMainButtonObject;
     [SerializeField] private Button moveToMainButton;
+    [SerializeField] private Image backgroundImage;
     [SerializeField] private TMP_Text statusText;
     [SerializeField] private sh_ImagePickerService imagePickerService;
     [SerializeField] private sh_ImageStorageService imageStorageService;
@@ -17,6 +18,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
 
     [Header("Scene Settings")]
     [SerializeField] private string mainSceneName = "MainScene";
+    [SerializeField] private Sprite moveButtonActivatedBackgroundSprite;
 
     [Header("Status Messages")]
     [SerializeField] private string defaultMessage = "추억이 담긴 사진을 선택해주세요.";
@@ -35,6 +37,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
 
     private bool isProcessingImage;
     private bool isLoadingMainScene;
+    private Sprite defaultBackgroundSprite;
 
     private void Awake()
     {
@@ -82,10 +85,25 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         {
             statusText = GetComponentInChildren<TMP_Text>(true);
         }
+
+        if (backgroundImage == null)
+        {
+            Image[] images = GetComponentsInChildren<Image>(true);
+
+            for (int index = 0; index < images.Length; index++)
+            {
+                if (images[index].name == "Background")
+                {
+                    backgroundImage = images[index];
+                    break;
+                }
+            }
+        }
     }
 
     private void OnEnable()
     {
+        CacheDefaultBackgroundSprite();
         SetMoveToMainButtonVisible(false);
         SetStatus(defaultMessage);
     }
@@ -166,6 +184,44 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         if (moveToMainButton != null)
         {
             moveToMainButton.interactable = isVisible;
+        }
+
+        UpdateBackgroundSprite(isVisible);
+    }
+
+    private void CacheDefaultBackgroundSprite()
+    {
+        if (backgroundImage == null || backgroundImage.sprite == null)
+        {
+            return;
+        }
+
+        if (defaultBackgroundSprite == null)
+        {
+            defaultBackgroundSprite = backgroundImage.sprite;
+        }
+    }
+
+    private void UpdateBackgroundSprite(bool isMoveButtonVisible)
+    {
+        if (backgroundImage == null)
+        {
+            return;
+        }
+
+        if (isMoveButtonVisible)
+        {
+            if (moveButtonActivatedBackgroundSprite != null)
+            {
+                backgroundImage.sprite = moveButtonActivatedBackgroundSprite;
+            }
+
+            return;
+        }
+
+        if (defaultBackgroundSprite != null)
+        {
+            backgroundImage.sprite = defaultBackgroundSprite;
         }
     }
 
