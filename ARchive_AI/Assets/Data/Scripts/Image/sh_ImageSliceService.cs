@@ -66,6 +66,10 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         public string FileName;
 
         public bool IsValid => PieceIndex >= 0 && !string.IsNullOrWhiteSpace(PiecePath);
+        public string TrackingImageName =>
+            !string.IsNullOrWhiteSpace(FileName) ?
+            Path.GetFileNameWithoutExtension(FileName) :
+            Path.GetFileNameWithoutExtension(PiecePath);
 
         public static SelectedMarkerPieceData Create(int pieceIndex, string piecePath, string fileName)
         {
@@ -94,6 +98,8 @@ public sealed class sh_ImageSliceService : MonoBehaviour
     [SerializeField] private string markerFilePrefix = "marker_piece";
     [SerializeField] private string rotatingFilePrefix = "rotating_piece";
     [SerializeField] private int sliceGridSize = 3;
+    [SerializeField] [Range(0f, 1f)] private float markerCandidateScoreThreshold = 0.08f;
+    [SerializeField] [Min(1)] private int markerCandidatePoolSize = 3;
 
     public string MarkerDirectoryPath => Path.Combine(Application.persistentDataPath, "Data", "Image", markerFolderName);
     public string RotatingDirectoryPath => Path.Combine(MarkerDirectoryPath, rotatingFolderName);
@@ -131,7 +137,7 @@ public sealed class sh_ImageSliceService : MonoBehaviour
             ClearPngFiles(RotatingDirectoryPath);
 
             string[] markerPiecePaths = SavePieces(sourceTexture, MarkerDirectoryPath, markerFilePrefix);
-            int selectedMarkerPieceIndex = UnityEngine.Random.Range(0, markerPiecePaths.Length);
+            int selectedMarkerPieceIndex = SelectMarkerPieceIndex(markerPiecePaths);
             string selectedMarkerPiecePath = markerPiecePaths[selectedMarkerPieceIndex];
             string selectedMarkerPieceFileName = Path.GetFileName(selectedMarkerPiecePath);
             DestroyTexture(sourceTexture);
@@ -195,6 +201,19 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         return true;
     }
 
+    public static bool TryLoadSelectedMarkerPieceData(out SelectedMarkerPieceData selectedMarkerPieceData)
+    {
+        selectedMarkerPieceData = LoadSelectedMarkerPieceFromPlayerPrefs();
+
+        if (!selectedMarkerPieceData.IsValid || !File.Exists(selectedMarkerPieceData.PiecePath))
+        {
+            selectedMarkerPieceData = SelectedMarkerPieceData.CreateEmpty();
+            return false;
+        }
+
+        return true;
+    }
+
     public void ClearSelectedMarkerPieceRecord()
     {
         LastSelectedMarkerPiece = SelectedMarkerPieceData.CreateEmpty();
@@ -248,6 +267,121 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         return pieceTexture;
     }
 
+    private int SelectMarkerPieceIndex(IReadOnlyList<string> markerPiecePaths)
+    {
+        if (markerPiecePaths == null || markerPiecePaths.Count == 0)
+        {
+            return 0;
+        }
+
+        List<(int Index, float Score)> scoredCandidates = new List<(int Index, float Score)>(markerPiecePaths.Count);
+
+        for (int index = 0; index < markerPiecePaths.Count; index++)
+        {
+            string piecePath = markerPiecePaths[index];
+            if (string.IsNullOrWhiteSpace(piecePath) || !File.Exists(piecePath))
+            {
+                continue;
+            }
+
+            Texture2D pieceTexture = LoadTextureFromFile(piecePath);
+            if (pieceTexture == null)
+            {
+                continue;
+            }
+
+            float score = EvaluateMarkerCandidateScore(pieceTexture);
+            scoredCandidates.Add((index, score));
+            DestroyTexture(pieceTexture);
+        }
+
+        if (scoredCandidates.Count == 0)
+        {
+            return UnityEngine.Random.Range(0, markerPiecePaths.Count);
+        }
+
+        scoredCandidates.Sort((left, right) => right.Score.CompareTo(left.Score));
+
+        List<int> validCandidateIndexes = new List<int>(markerCandidatePoolSize);
+        int candidateCount = Mathf.Min(markerCandidatePoolSize, scoredCandidates.Count);
+
+        for (int index = 0; index < candidateCount; index++)
+        {
+            if (scoredCandidates[index].Score < markerCandidateScoreThreshold)
+            {
+                continue;
+            }
+
+            validCandidateIndexes.Add(scoredCandidates[index].Index);
+        }
+
+        if (validCandidateIndexes.Count > 0)
+        {
+            int randomCandidateIndex = UnityEngine.Random.Range(0, validCandidateIndexes.Count);
+            return validCandidateIndexes[randomCandidateIndex];
+        }
+
+        return scoredCandidates[0].Index;
+    }
+
+    private static float EvaluateMarkerCandidateScore(Texture2D texture)
+    {
+        if (texture == null || texture.width <= 1 || texture.height <= 1)
+        {
+            return 0f;
+        }
+
+        Color32[] pixels = texture.GetPixels32();
+        if (pixels == null || pixels.Length == 0)
+        {
+            return 0f;
+        }
+
+        float brightnessSum = 0f;
+        float brightnessSquaredSum = 0f;
+        int strongEdgeCount = 0;
+        int sampleCount = pixels.Length;
+        int width = texture.width;
+        int height = texture.height;
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int pixelIndex = (y * width) + x;
+                float brightness = GetPixelBrightness(pixels[pixelIndex]);
+                brightnessSum += brightness;
+                brightnessSquaredSum += brightness * brightness;
+
+                if (x >= width - 1 || y >= height - 1)
+                {
+                    continue;
+                }
+
+                float rightBrightness = GetPixelBrightness(pixels[pixelIndex + 1]);
+                float downBrightness = GetPixelBrightness(pixels[pixelIndex + width]);
+                float localContrast = Mathf.Abs(brightness - rightBrightness) + Mathf.Abs(brightness - downBrightness);
+
+                if (localContrast > 0.35f)
+                {
+                    strongEdgeCount++;
+                }
+            }
+        }
+
+        float averageBrightness = brightnessSum / sampleCount;
+        float variance = Mathf.Max(0f, (brightnessSquaredSum / sampleCount) - (averageBrightness * averageBrightness));
+        float normalizedVariance = Mathf.Clamp01(variance * 6f);
+        float edgeDensity = Mathf.Clamp01((float)strongEdgeCount / sampleCount * 6f);
+
+        return (normalizedVariance * 0.6f) + (edgeDensity * 0.4f);
+    }
+
+    private static float GetPixelBrightness(Color32 pixel)
+    {
+        return ((pixel.r * 0.299f) + (pixel.g * 0.587f) + (pixel.b * 0.114f)) / 255f;
+    }
+
     private static Texture2D LoadTextureFromFile(string filePath)
     {
         byte[] imageBytes = File.ReadAllBytes(filePath);
@@ -264,10 +398,7 @@ public sealed class sh_ImageSliceService : MonoBehaviour
 
     private void LoadSelectedMarkerPiece()
     {
-        int pieceIndex = PlayerPrefs.GetInt(SelectedMarkerPieceIndexPlayerPrefsKey, -1);
-        string piecePath = PlayerPrefs.GetString(SelectedMarkerPiecePathPlayerPrefsKey, string.Empty);
-        string fileName = PlayerPrefs.GetString(SelectedMarkerPieceFileNamePlayerPrefsKey, string.Empty);
-        LastSelectedMarkerPiece = SelectedMarkerPieceData.Create(pieceIndex, piecePath, fileName);
+        LastSelectedMarkerPiece = LoadSelectedMarkerPieceFromPlayerPrefs();
     }
 
     private static void SaveSelectedMarkerPiece(SelectedMarkerPieceData selectedMarkerPieceData)
@@ -276,6 +407,14 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         PlayerPrefs.SetString(SelectedMarkerPiecePathPlayerPrefsKey, selectedMarkerPieceData.PiecePath);
         PlayerPrefs.SetString(SelectedMarkerPieceFileNamePlayerPrefsKey, selectedMarkerPieceData.FileName);
         PlayerPrefs.Save();
+    }
+
+    private static SelectedMarkerPieceData LoadSelectedMarkerPieceFromPlayerPrefs()
+    {
+        int pieceIndex = PlayerPrefs.GetInt(SelectedMarkerPieceIndexPlayerPrefsKey, -1);
+        string piecePath = PlayerPrefs.GetString(SelectedMarkerPiecePathPlayerPrefsKey, string.Empty);
+        string fileName = PlayerPrefs.GetString(SelectedMarkerPieceFileNamePlayerPrefsKey, string.Empty);
+        return SelectedMarkerPieceData.Create(pieceIndex, piecePath, fileName);
     }
 
     private static int[] BuildSegmentSizes(int totalSize, int segmentCount)

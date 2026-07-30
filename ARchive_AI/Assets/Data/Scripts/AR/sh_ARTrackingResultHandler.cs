@@ -95,6 +95,13 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
         arSceneController.HandleTrackingSuccess(referenceImageName);
     }
 
+    public void SetTargetReferenceImageName(string referenceImageName)
+    {
+        targetReferenceImageName = string.IsNullOrWhiteSpace(referenceImageName) ?
+            string.Empty :
+            referenceImageName.Trim();
+    }
+
     private bool IsTargetReferenceImage(string referenceImageName)
     {
         if (string.IsNullOrWhiteSpace(targetReferenceImageName))

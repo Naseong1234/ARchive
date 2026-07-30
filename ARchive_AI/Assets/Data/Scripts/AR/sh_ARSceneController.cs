@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public sealed class sh_ARSceneController : MonoBehaviour
 {
     [Header("UI References")]
+    [SerializeField] private GameObject successEffectUiObject;
     [SerializeField] private GameObject completionMessageObject;
     [SerializeField] private TMP_Text completionMessageText;
     [SerializeField] private GameObject returnToLoginButtonObject;
@@ -48,6 +49,7 @@ public sealed class sh_ARSceneController : MonoBehaviour
             completionMessageText.text = successMessage;
         }
 
+        SetSuccessEffectUiVisible(true);
         SetCompletionMessageVisible(true);
         SetReturnToLoginButtonVisible(true);
 
@@ -119,8 +121,17 @@ public sealed class sh_ARSceneController : MonoBehaviour
     {
         hasHandledTrackingSuccess = false;
         isReturningToLoginScene = false;
+        SetSuccessEffectUiVisible(false);
         SetCompletionMessageVisible(false);
         SetReturnToLoginButtonVisible(false);
+    }
+
+    private void SetSuccessEffectUiVisible(bool isVisible)
+    {
+        if (successEffectUiObject != null)
+        {
+            successEffectUiObject.SetActive(isVisible);
+        }
     }
 
     private void SetCompletionMessageVisible(bool isVisible)
