@@ -721,7 +721,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -466}
+  m_AnchoredPosition: {x: 0, y: -480}
   m_SizeDelta: {x: 300, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &994806170
@@ -1172,8 +1172,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 45
+  m_fontSizeBase: 45
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1189,7 +1189,7 @@ MonoBehaviour:
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
   m_charWidthMaxAdj: 0
-  m_TextWrappingMode: 1
+  m_TextWrappingMode: 0
   m_wordWrappingRatios: 0.4
   m_overflowMode: 0
   m_linkedTextComponent: {fileID: 0}
@@ -1412,7 +1412,8 @@ MonoBehaviour:
   imageSliceService: {fileID: 1827754099}
   mainSceneName: MainScene
   moveButtonActivatedBackgroundSprite: {fileID: 21300000, guid: d75c0f080ddc02d4aa24bf6d3d762517, type: 3}
-  defaultMessage: "\uCD94\uC5B5\uC774 \uB2F4\uAE34 \uC0AC\uC9C4\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694."
+  defaultMessage: "\uCD94\uC5B5\uC774 \uB2F4\uAE34 \uC0AC\uC9C4\uC744 \uC120\uD0DD\uD574
+    \uC8FC\uC138\uC694."
   pickingMessage: "\uC0AC\uC9C4 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4."
   savingMessage: "\uC120\uD0DD\uD55C \uC0AC\uC9C4\uC744 \uC791\uC5C5\uC6A9 \uACBD\uB85C\uC5D0
     \uC800\uC7A5\uD558\uB294 \uC911\uC785\uB2C8\uB2E4."
