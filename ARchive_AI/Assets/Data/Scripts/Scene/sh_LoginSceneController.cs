@@ -1,7 +1,6 @@
-using TMPro;
 using System.Collections;
+using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public sealed class sh_LoginSceneController : MonoBehaviour
@@ -17,7 +16,6 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     [SerializeField] private sh_ImageSliceService imageSliceService;
 
     [Header("Scene Settings")]
-    [SerializeField] private string mainSceneName = "MainScene";
     [SerializeField] private Sprite moveButtonActivatedBackgroundSprite;
 
     [Header("Status Messages")]
@@ -36,7 +34,6 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     public int SelectedMarkerPieceIndex { get; private set; } = -1;
 
     private bool isProcessingImage;
-    private bool isLoadingMainScene;
     private Sprite defaultBackgroundSprite;
 
     private void Awake()
@@ -131,11 +128,6 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         SetStatus(pickingMessage);
 
         imagePickerService.PickImage(HandleImagePickSuccess, HandleImagePickCancelled, HandleImagePickFailed);
-    }
-
-    public void OnAttachFileButtonClicked()
-    {
-        OpenImagePickerFromButton();
     }
 
     public void OnExitButtonClicked()
