@@ -1,3 +1,4 @@
+using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -17,11 +18,20 @@ public sealed class sh_ARSceneController : MonoBehaviour
     [Header("Scene Settings")]
     [SerializeField] private string loginSceneName = "LoginScene";
 
+    [Header("Original Image Preview")]
+    [SerializeField] private sh_PuzzlePieceUI originalImagePreviewPrefab;
+    [SerializeField] private RectTransform originalImagePreviewSpawnRoot;
+    [SerializeField] private RectTransform originalImagePreviewSpawnPoint;
+    [SerializeField] private float originalImagePreviewSpritePixelsPerUnit = 100f;
+
     [Header("Messages")]
     [SerializeField] private string successMessage = "과거의 추억을 되찾았습니다";
 
     private bool hasHandledTrackingSuccess;
     private bool isReturningToLoginScene;
+    private sh_PuzzlePieceUI originalImagePreviewInstance;
+    private Sprite originalImagePreviewSprite;
+    private Texture2D originalImagePreviewTexture;
 
     private void Awake()
     {
@@ -50,6 +60,7 @@ public sealed class sh_ARSceneController : MonoBehaviour
             completionMessageText.text = successMessage;
         }
 
+        CreateOriginalImagePreview();
         SetSuccessEffectUiVisible(true);
         SetCompletionMessageVisible(true);
         SetReturnToLoginButtonVisible(true);
@@ -170,5 +181,119 @@ public sealed class sh_ARSceneController : MonoBehaviour
         {
             returnToLoginButton.interactable = isVisible;
         }
+    }
+
+    private void CreateOriginalImagePreview()
+    {
+        if (originalImagePreviewPrefab == null ||
+            originalImagePreviewSpawnRoot == null ||
+            originalImagePreviewSpawnPoint == null)
+        {
+            return;
+        }
+
+        if (!sh_ImageStorageService.TryLoadSavedImagePath(out string savedImagePath))
+        {
+            Debug.LogWarning($"{nameof(sh_ARSceneController)}: 저장된 원본 이미지 경로가 없어 원본 이미지 프리뷰를 생성하지 못했습니다.", this);
+            return;
+        }
+
+        ClearOriginalImagePreview();
+
+        originalImagePreviewSprite = CreateSpriteFromFile(savedImagePath, out originalImagePreviewTexture);
+        if (originalImagePreviewSprite == null)
+        {
+            Debug.LogWarning($"{nameof(sh_ARSceneController)}: 원본 이미지 프리뷰 스프라이트를 만들지 못했습니다.\n{savedImagePath}", this);
+            return;
+        }
+
+        originalImagePreviewInstance = Instantiate(originalImagePreviewPrefab, originalImagePreviewSpawnRoot);
+        originalImagePreviewInstance.Configure(
+            new sh_PuzzlePieceData(1, 0, savedImagePath),
+            originalImagePreviewSprite);
+
+        ApplySpawnPointLayout(originalImagePreviewInstance.RectTransform, originalImagePreviewSpawnPoint);
+    }
+
+    private void ApplySpawnPointLayout(RectTransform pieceRectTransform, RectTransform spawnPoint)
+    {
+        if (pieceRectTransform == null || spawnPoint == null)
+        {
+            return;
+        }
+
+        Vector2 originalAnchorMin = pieceRectTransform.anchorMin;
+        Vector2 originalAnchorMax = pieceRectTransform.anchorMax;
+        Vector2 originalPivot = pieceRectTransform.pivot;
+        Vector2 originalSizeDelta = pieceRectTransform.sizeDelta;
+        RectTransform parentRectTransform = spawnPoint.parent as RectTransform;
+
+        if (parentRectTransform != null)
+        {
+            pieceRectTransform.SetParent(parentRectTransform, false);
+        }
+
+        pieceRectTransform.anchorMin = originalAnchorMin;
+        pieceRectTransform.anchorMax = originalAnchorMax;
+        pieceRectTransform.pivot = originalPivot;
+        pieceRectTransform.sizeDelta = originalSizeDelta;
+        pieceRectTransform.position = spawnPoint.position;
+        pieceRectTransform.localScale = Vector3.one;
+    }
+
+    private Sprite CreateSpriteFromFile(string filePath, out Texture2D loadedTexture)
+    {
+        loadedTexture = null;
+
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return null;
+        }
+
+        byte[] imageBytes = File.ReadAllBytes(filePath);
+        loadedTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+
+        if (!ImageConversion.LoadImage(loadedTexture, imageBytes, false))
+        {
+            Destroy(loadedTexture);
+            loadedTexture = null;
+            return null;
+        }
+
+        loadedTexture.name = Path.GetFileNameWithoutExtension(filePath);
+
+        Sprite sprite = Sprite.Create(
+            loadedTexture,
+            new Rect(0f, 0f, loadedTexture.width, loadedTexture.height),
+            new Vector2(0.5f, 0.5f),
+            originalImagePreviewSpritePixelsPerUnit);
+        sprite.name = loadedTexture.name;
+        return sprite;
+    }
+
+    private void ClearOriginalImagePreview()
+    {
+        if (originalImagePreviewInstance != null)
+        {
+            Destroy(originalImagePreviewInstance.gameObject);
+            originalImagePreviewInstance = null;
+        }
+
+        if (originalImagePreviewSprite != null)
+        {
+            Destroy(originalImagePreviewSprite);
+            originalImagePreviewSprite = null;
+        }
+
+        if (originalImagePreviewTexture != null)
+        {
+            Destroy(originalImagePreviewTexture);
+            originalImagePreviewTexture = null;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        ClearOriginalImagePreview();
     }
 }

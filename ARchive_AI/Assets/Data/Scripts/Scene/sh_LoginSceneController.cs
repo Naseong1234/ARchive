@@ -138,6 +138,17 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         OpenImagePickerFromButton();
     }
 
+    public void OnExitButtonClicked()
+    {
+        Debug.Log($"{nameof(sh_LoginSceneController)}: 종료 버튼이 눌려 앱을 종료합니다.", this);
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
     private void HandleImagePickSuccess(string selectedPath)
     {
         SelectedImagePath = selectedPath;
