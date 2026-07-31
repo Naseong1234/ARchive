@@ -104,6 +104,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     private void OnEnable()
     {
         CacheDefaultBackgroundSprite();
+        SetAttachFileButtonVisible(true);
         SetMoveToMainButtonVisible(false);
         SetStatus(defaultMessage);
     }
@@ -186,7 +187,18 @@ public sealed class sh_LoginSceneController : MonoBehaviour
             moveToMainButton.interactable = isVisible;
         }
 
+        SetAttachFileButtonVisible(!isVisible);
         UpdateBackgroundSprite(isVisible);
+    }
+
+    private void SetAttachFileButtonVisible(bool isVisible)
+    {
+        if (attachFileButton == null)
+        {
+            return;
+        }
+
+        attachFileButton.gameObject.SetActive(isVisible);
     }
 
     private void CacheDefaultBackgroundSprite()
@@ -295,12 +307,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         LastSliceResult = sliceResult;
         SelectedMarkerPieceIndex = sliceResult.SelectedMarkerPiece.PieceIndex;
         SetMoveToMainButtonVisible(true);
-        SetStatus(
-            $"{successMessage}\n" +
-            $"원본 저장 경로: {SavedImagePath}\n" +
-            $"1차 조각 폴더: {sliceResult.MarkerDirectoryPath}\n" +
-            $"2차 조각 폴더: {sliceResult.RotatingDirectoryPath}\n" +
-            $"랜덤 선택 조각: {sliceResult.SelectedMarkerPiece.FileName}");
+        SetStatus(successMessage);
         Debug.Log(
             $"{nameof(sh_LoginSceneController)}: Selected image path = {selectedPath}\n" +
             $"Saved image path = {SavedImagePath}\n" +
