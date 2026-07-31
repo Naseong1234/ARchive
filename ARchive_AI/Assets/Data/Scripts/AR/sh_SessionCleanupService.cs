@@ -19,11 +19,6 @@ public sealed class sh_SessionCleanupService : MonoBehaviour
     [Header("Cleanup Settings")]
     [SerializeField] private bool deleteEmptyDirectories = true;
 
-    [Header("Debug Data")]
-    [SerializeField] private CleanupResult lastCleanupResult;
-
-    public CleanupResult LastCleanupResult => lastCleanupResult;
-
     private void Awake()
     {
         ResolveReferences();
@@ -72,8 +67,6 @@ public sealed class sh_SessionCleanupService : MonoBehaviour
 
             imageStorageService.ClearSavedImageRecord();
         }
-
-        lastCleanupResult = cleanupResult;
 
         Debug.Log(
             $"{nameof(sh_SessionCleanupService)}: 세션 정리 완료.\n" +

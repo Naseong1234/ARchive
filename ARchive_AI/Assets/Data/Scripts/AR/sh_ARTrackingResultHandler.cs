@@ -31,13 +31,11 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
 
         if (trackedImageManager == null)
         {
-            ReportDebugStatus("실패: AR Tracked Image Manager 참조 없음");
             Debug.LogError($"{nameof(sh_ARTrackingResultHandler)}: {nameof(trackedImageManager)} 참조가 필요합니다.", this);
             return;
         }
 
         trackedImageManager.trackablesChanged.AddListener(HandleTrackablesChanged);
-        ReportDebugStatus("AR 트래킹 이벤트 구독 완료");
     }
 
     private void OnDisable()
@@ -81,11 +79,9 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
         }
 
         string referenceImageName = trackedImage.referenceImage.name;
-        ReportDebugStatus($"이미지 감지: {referenceImageName}");
 
         if (!IsTargetReferenceImage(referenceImageName))
         {
-            ReportDebugStatus($"감지됨, 그러나 대상 아님: {referenceImageName}");
             return;
         }
 
@@ -93,7 +89,6 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
 
         if (arSceneController == null)
         {
-            ReportDebugStatus("실패: AR Scene Controller 참조 없음");
             Debug.LogError($"{nameof(sh_ARTrackingResultHandler)}: {nameof(arSceneController)} 참조가 필요합니다.", this);
             return;
         }
@@ -106,8 +101,6 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
         targetReferenceImageName = string.IsNullOrWhiteSpace(referenceImageName) ?
             string.Empty :
             referenceImageName.Trim();
-
-        ReportDebugStatus($"트래킹 대상 설정: {targetReferenceImageName}");
     }
 
     private bool IsTargetReferenceImage(string referenceImageName)
@@ -133,14 +126,6 @@ public sealed class sh_ARTrackingResultHandler : MonoBehaviour
         if (arSceneController == null)
         {
             arSceneController = GetComponent<sh_ARSceneController>();
-        }
-    }
-
-    public void ReportDebugStatus(string message)
-    {
-        if (arSceneController != null)
-        {
-            arSceneController.SetDebugStatus(message);
         }
     }
 }

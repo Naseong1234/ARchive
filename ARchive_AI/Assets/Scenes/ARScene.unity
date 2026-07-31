@@ -1169,10 +1169,6 @@ MonoBehaviour:
   imageStorageService: {fileID: 0}
   imageSliceService: {fileID: 0}
   deleteEmptyDirectories: 1
-  lastCleanupResult:
-    DeletedFileCount: 0
-    DeletedDirectoryCount: 0
-    LastDeletedOriginalImagePath: 
 --- !u!114 &1012688407
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1203,7 +1199,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::sh_ARSceneController
   successEffectUiObject: {fileID: 0}
-  debugStatusText: {fileID: 0}
   completionMessageObject: {fileID: 435876173}
   completionMessageText: {fileID: 435876175}
   returnToLoginButtonObject: {fileID: 1389452271}
@@ -1251,9 +1246,6 @@ MonoBehaviour:
   markerPieceSpawnRoot: {fileID: 662508249}
   markerPieceSpawnPoint: {fileID: 1922673971}
   spritePixelsPerUnit: 100
-  lastMarkerImagePath: 
-  lastMarkerImageName: 
-  lastAddJobStatus: 0
 --- !u!1 &1129058071
 GameObject:
   m_ObjectHideFlags: 0

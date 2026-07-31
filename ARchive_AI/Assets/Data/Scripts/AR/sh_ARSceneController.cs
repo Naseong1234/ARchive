@@ -8,7 +8,6 @@ public sealed class sh_ARSceneController : MonoBehaviour
 {
     [Header("UI References")]
     [SerializeField] private GameObject successEffectUiObject;
-    [SerializeField] private TMP_Text debugStatusText;
     [SerializeField] private GameObject completionMessageObject;
     [SerializeField] private TMP_Text completionMessageText;
     [SerializeField] private GameObject returnToLoginButtonObject;
@@ -64,7 +63,6 @@ public sealed class sh_ARSceneController : MonoBehaviour
         SetSuccessEffectUiVisible(true);
         SetCompletionMessageVisible(true);
         SetReturnToLoginButtonVisible(true);
-        SetDebugStatus($"트래킹 성공: {trackedImageName}");
 
         if (!string.IsNullOrWhiteSpace(trackedImageName))
         {
@@ -73,11 +71,6 @@ public sealed class sh_ARSceneController : MonoBehaviour
         }
 
         Debug.Log($"{nameof(sh_ARSceneController)}: 이미지 트래킹 성공.", this);
-    }
-
-    public void OnReturnToLoginButtonClicked()
-    {
-        ReturnToLoginScene();
     }
 
     public void ReturnToLoginScene()
@@ -92,7 +85,6 @@ public sealed class sh_ARSceneController : MonoBehaviour
 
         if (sessionCleanupService != null)
         {
-            SetDebugStatus("세션 정리 후 로그인 씬으로 이동합니다.");
             sessionCleanupService.CleanupSessionFiles();
         }
         else
@@ -138,20 +130,6 @@ public sealed class sh_ARSceneController : MonoBehaviour
         SetSuccessEffectUiVisible(false);
         SetCompletionMessageVisible(false);
         SetReturnToLoginButtonVisible(false);
-        SetDebugStatus("AR 디버그 대기 중");
-    }
-
-    public void SetDebugStatus(string message)
-    {
-        if (debugStatusText != null)
-        {
-            debugStatusText.text = message;
-        }
-
-        if (!string.IsNullOrWhiteSpace(message))
-        {
-            Debug.Log($"{nameof(sh_ARSceneController)}: {message}", this);
-        }
     }
 
     private void SetSuccessEffectUiVisible(bool isVisible)

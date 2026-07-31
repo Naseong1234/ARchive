@@ -181,26 +181,6 @@ public sealed class sh_ImageSliceService : MonoBehaviour
         }
     }
 
-    public bool TryGetSelectedMarkerPieceData(out SelectedMarkerPieceData selectedMarkerPieceData)
-    {
-        if (LastSelectedMarkerPiece.IsValid && File.Exists(LastSelectedMarkerPiece.PiecePath))
-        {
-            selectedMarkerPieceData = LastSelectedMarkerPiece;
-            return true;
-        }
-
-        LoadSelectedMarkerPiece();
-
-        if (!LastSelectedMarkerPiece.IsValid || !File.Exists(LastSelectedMarkerPiece.PiecePath))
-        {
-            selectedMarkerPieceData = SelectedMarkerPieceData.CreateEmpty();
-            return false;
-        }
-
-        selectedMarkerPieceData = LastSelectedMarkerPiece;
-        return true;
-    }
-
     public static bool TryLoadSelectedMarkerPieceData(out SelectedMarkerPieceData selectedMarkerPieceData)
     {
         selectedMarkerPieceData = LoadSelectedMarkerPieceFromPlayerPrefs();
