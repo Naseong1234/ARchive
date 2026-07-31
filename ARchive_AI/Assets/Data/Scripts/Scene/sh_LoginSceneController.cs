@@ -320,4 +320,26 @@ public sealed class sh_LoginSceneController : MonoBehaviour
 
         isProcessingImage = false;
     }
+
+    public void ShowImage(GameObject imageObject)
+    {
+        if (imageObject == null)
+        {
+            return;
+        }
+
+        imageObject.SetActive(true);
+    }
+
+    public void CloseImage(GameObject imageObject)
+    {
+        if (imageObject == null)
+        {
+            return;
+        }
+
+        imageObject.SetActive(false);
+    }
+
+
 }
