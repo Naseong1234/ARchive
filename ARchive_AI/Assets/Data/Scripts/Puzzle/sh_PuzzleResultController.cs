@@ -1,6 +1,5 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public sealed class sh_PuzzleResultController : MonoBehaviour
@@ -46,8 +45,6 @@ public sealed class sh_PuzzleResultController : MonoBehaviour
         SetCompletionMessageVisible(true);
         SetMoveToArButtonVisible(true);
     }
-
-    
 
     private void ResolveReferences()
     {

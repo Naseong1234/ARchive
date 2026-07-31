@@ -40,17 +40,7 @@ public sealed class sh_RotationRandomizer : MonoBehaviour
     [SerializeField] private int expectedPieceCount = 9;
     [SerializeField] private bool allowZeroRotation = true;
 
-    [Header("Debug Data")]
-    [SerializeField] private List<sh_PuzzlePieceData> lastGeneratedPieceData = new();
-
     private static readonly int[] AllowedRotationValues = { 0, 90, 180, 270 };
-
-    public IReadOnlyList<sh_PuzzlePieceData> LastGeneratedPieceData => lastGeneratedPieceData;
-
-    public RotationResult CreatePieceDataList(sh_ImageSliceService.SliceResult sliceResult)
-    {
-        return CreatePieceDataList(sliceResult.RotatingPiecePaths);
-    }
 
     public RotationResult CreatePieceDataList(IReadOnlyList<string> pieceImagePaths)
     {
@@ -90,24 +80,17 @@ public sealed class sh_RotationRandomizer : MonoBehaviour
             generatedPieceData.Add(new sh_PuzzlePieceData(index + 1, rotationValue, pieceImagePath));
         }
 
-        lastGeneratedPieceData = generatedPieceData;
         Debug.Log(
             $"{nameof(sh_RotationRandomizer)}: Rotation data generated.\n" +
-            $"Piece count = {lastGeneratedPieceData.Count}\n" +
+            $"Piece count = {generatedPieceData.Count}\n" +
             $"Source path = {sourceDirectoryPath}",
             this);
 
         return RotationResult.CreateSuccess(sourceDirectoryPath, generatedPieceData);
     }
 
-    public void ClearDebugData()
-    {
-        lastGeneratedPieceData.Clear();
-    }
-
     private RotationResult LogFailure(string sourceDirectoryPath, string errorMessage)
     {
-        lastGeneratedPieceData.Clear();
         Debug.LogError($"{nameof(sh_RotationRandomizer)}: {errorMessage}", this);
         return RotationResult.CreateFailure(sourceDirectoryPath, errorMessage);
     }

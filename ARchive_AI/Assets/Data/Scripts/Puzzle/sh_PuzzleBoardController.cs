@@ -147,16 +147,6 @@ public sealed class sh_PuzzleBoardController : MonoBehaviour
             this);
     }
 
-    public IReadOnlyList<sh_PuzzlePieceData> GetGeneratedPieceData()
-    {
-        return generatedPieceData;
-    }
-
-    public IReadOnlyList<sh_PuzzleSlot> GetPuzzleSlots()
-    {
-        return puzzleSlots;
-    }
-
     public void HandlePieceBeginDrag(sh_PuzzleDragHandler dragHandler)
     {
         if (dragHandler == null)
