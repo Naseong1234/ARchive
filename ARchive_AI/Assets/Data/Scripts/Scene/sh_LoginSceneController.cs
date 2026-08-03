@@ -1,10 +1,29 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 public sealed class sh_LoginSceneController : MonoBehaviour
 {
+    private const string ArchivedImageQueuePlayerPrefsKey = "sh_login_archived_original_image_queue";
+
+    [Serializable]
+    private struct ArchivedImageEntry
+    {
+        public string filePath;
+        public string fileName;
+        public long savedTicks;
+    }
+
+    [Serializable]
+    private sealed class ArchivedImageQueueData
+    {
+        public List<ArchivedImageEntry> entries = new List<ArchivedImageEntry>();
+    }
+
     [Header("UI References")]
     [SerializeField] private Button attachFileButton;
     [SerializeField] private GameObject moveToMainButtonObject;
@@ -14,9 +33,15 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     [SerializeField] private sh_ImagePickerService imagePickerService;
     [SerializeField] private sh_ImageStorageService imageStorageService;
     [SerializeField] private sh_ImageSliceService imageSliceService;
+    [SerializeField] private sh_PuzzlePieceUI archivedImagePreviewPrefab;
+    [SerializeField] private RectTransform archivedImagePreviewRoot;
+    [SerializeField] private RectTransform[] archivedImagePreviewPoints = Array.Empty<RectTransform>();
 
     [Header("Scene Settings")]
     [SerializeField] private Sprite moveButtonActivatedBackgroundSprite;
+    [SerializeField] private float archivedImagePreviewSpritePixelsPerUnit = 100f;
+    [SerializeField] private string archivedImageFolderName = "LoginOriginalArchive";
+    [SerializeField] [Min(1)] private int maxArchivedImageCount = 6;
 
     [Header("Status Messages")]
     [SerializeField] private string defaultMessage = "추억이 담긴 사진을 선택해주세요.";
@@ -25,6 +50,7 @@ public sealed class sh_LoginSceneController : MonoBehaviour
     [SerializeField] private string slicingMessage = "퍼즐용 이미지 조각을 생성하는 중입니다.";
     [SerializeField] private string successMessage = "사진 저장과 이미지 분할이 완료되었습니다.";
     [SerializeField] private string cancelMessage = "사진 선택이 취소되었습니다.";
+    [SerializeField] private string archiveSaveFailedMessage = "원본 이미지 보관에는 실패했지만 퍼즐용 데이터는 생성되었습니다.";
 
     public string SelectedImagePath { get; private set; }
     public bool HasSelectedImage => !string.IsNullOrEmpty(SelectedImagePath);
@@ -35,10 +61,18 @@ public sealed class sh_LoginSceneController : MonoBehaviour
 
     private bool isProcessingImage;
     private Sprite defaultBackgroundSprite;
+    private readonly List<ArchivedImageEntry> archivedImageEntries = new List<ArchivedImageEntry>();
+    private readonly List<sh_PuzzlePieceUI> archivedImagePreviewInstances = new List<sh_PuzzlePieceUI>();
+    private readonly List<Sprite> archivedImagePreviewSprites = new List<Sprite>();
+    private readonly List<Texture2D> archivedImagePreviewTextures = new List<Texture2D>();
+
+    private string ArchivedImageDirectoryPath =>
+        Path.Combine(Application.persistentDataPath, "Data", "Image", archivedImageFolderName);
 
     private void Awake()
     {
         ResolveReferences();
+        LoadArchivedImageEntries();
     }
 
     private void Reset()
@@ -100,10 +134,17 @@ public sealed class sh_LoginSceneController : MonoBehaviour
 
     private void OnEnable()
     {
+        LoadArchivedImageEntries();
         CacheDefaultBackgroundSprite();
         SetAttachFileButtonVisible(true);
         SetMoveToMainButtonVisible(false);
         SetStatus(defaultMessage);
+        RefreshArchivedImagePreviews();
+    }
+
+    private void OnDisable()
+    {
+        ClearArchivedImagePreviews();
     }
 
     public void OpenImagePickerFromButton()
@@ -280,6 +321,8 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         SavedImagePath = storageResult.SavedFilePath;
         LastSliceResult = default;
 
+        bool archiveSaveSucceeded = TryArchiveOriginalImage(SavedImagePath, out string archiveErrorMessage);
+
         if (imageSliceService == null)
         {
             SetInteractable(true);
@@ -310,13 +353,19 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         LastSliceResult = sliceResult;
         SelectedMarkerPieceIndex = sliceResult.SelectedMarkerPiece.PieceIndex;
         SetMoveToMainButtonVisible(true);
-        SetStatus(successMessage);
+        SetStatus(archiveSaveSucceeded ? successMessage : $"{successMessage}\n{archiveSaveFailedMessage}");
         Debug.Log(
             $"{nameof(sh_LoginSceneController)}: Selected image path = {selectedPath}\n" +
             $"Saved image path = {SavedImagePath}\n" +
+            $"Archived image count = {archivedImageEntries.Count}\n" +
             $"Selected marker piece index = {SelectedMarkerPieceIndex}\n" +
             $"Selected marker piece path = {sliceResult.SelectedMarkerPiece.PiecePath}",
             this);
+
+        if (!archiveSaveSucceeded)
+        {
+            Debug.LogWarning($"{nameof(sh_LoginSceneController)}: {archiveErrorMessage}", this);
+        }
 
         isProcessingImage = false;
     }
@@ -341,5 +390,327 @@ public sealed class sh_LoginSceneController : MonoBehaviour
         imageObject.SetActive(false);
     }
 
+    public void ResetAllDeviceSavedDataForDeveloper()
+    {
+        ResolveReferences();
+        ClearArchivedImagePreviews();
+        DeleteAllArchivedImages();
+        DeleteSessionGeneratedFiles();
+        ClearRuntimeRecords();
+        RefreshArchivedImagePreviews();
+        SetMoveToMainButtonVisible(false);
+        SetStatus("개발자 초기화가 완료되었습니다.");
 
+        Debug.Log($"{nameof(sh_LoginSceneController)}: 개발자용 기기 저장 데이터 초기화가 완료되었습니다.", this);
+    }
+
+    private bool TryArchiveOriginalImage(string sourceFilePath, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(sourceFilePath) || !File.Exists(sourceFilePath))
+        {
+            errorMessage = "보관할 원본 이미지 파일을 찾을 수 없습니다.";
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(ArchivedImageDirectoryPath);
+
+            string extension = Path.GetExtension(sourceFilePath);
+            string archivedFileName = $"login_original_{DateTime.Now:yyyyMMdd_HHmmss_fff}{extension}";
+            string archivedFilePath = Path.Combine(ArchivedImageDirectoryPath, archivedFileName);
+            File.Copy(sourceFilePath, archivedFilePath, true);
+
+            ArchivedImageEntry newEntry = new ArchivedImageEntry
+            {
+                filePath = archivedFilePath,
+                fileName = archivedFileName,
+                savedTicks = DateTime.UtcNow.Ticks
+            };
+
+            archivedImageEntries.Add(newEntry);
+            SortArchivedImageEntries();
+            TrimArchivedImageEntriesToLimit();
+            SaveArchivedImageEntries();
+            RefreshArchivedImagePreviews();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            errorMessage = $"원본 이미지 보관 중 오류가 발생했습니다.\n{exception.Message}";
+            return false;
+        }
+    }
+
+    private void LoadArchivedImageEntries()
+    {
+        archivedImageEntries.Clear();
+
+        string json = PlayerPrefs.GetString(ArchivedImageQueuePlayerPrefsKey, string.Empty);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            ArchivedImageQueueData queueData = JsonUtility.FromJson<ArchivedImageQueueData>(json);
+            if (queueData != null && queueData.entries != null)
+            {
+                archivedImageEntries.AddRange(queueData.entries);
+            }
+        }
+
+        RemoveMissingArchivedEntries();
+        SortArchivedImageEntries();
+        TrimArchivedImageEntriesToLimit();
+        SaveArchivedImageEntries();
+    }
+
+    private void SaveArchivedImageEntries()
+    {
+        ArchivedImageQueueData queueData = new ArchivedImageQueueData();
+        queueData.entries.AddRange(archivedImageEntries);
+        string json = JsonUtility.ToJson(queueData);
+        PlayerPrefs.SetString(ArchivedImageQueuePlayerPrefsKey, json);
+        PlayerPrefs.Save();
+    }
+
+    private void RemoveMissingArchivedEntries()
+    {
+        for (int index = archivedImageEntries.Count - 1; index >= 0; index--)
+        {
+            if (string.IsNullOrWhiteSpace(archivedImageEntries[index].filePath) ||
+                !File.Exists(archivedImageEntries[index].filePath))
+            {
+                archivedImageEntries.RemoveAt(index);
+            }
+        }
+    }
+
+    private void SortArchivedImageEntries()
+    {
+        archivedImageEntries.Sort((left, right) => left.savedTicks.CompareTo(right.savedTicks));
+    }
+
+    private void TrimArchivedImageEntriesToLimit()
+    {
+        while (archivedImageEntries.Count > maxArchivedImageCount)
+        {
+            DeleteArchivedEntryFile(archivedImageEntries[0]);
+            archivedImageEntries.RemoveAt(0);
+        }
+    }
+
+    private static void DeleteArchivedEntryFile(ArchivedImageEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.filePath) || !File.Exists(entry.filePath))
+        {
+            return;
+        }
+
+        File.Delete(entry.filePath);
+    }
+
+    private void RefreshArchivedImagePreviews()
+    {
+        ClearArchivedImagePreviews();
+
+        if (archivedImagePreviewPrefab == null ||
+            archivedImagePreviewRoot == null ||
+            archivedImagePreviewPoints == null ||
+            archivedImagePreviewPoints.Length == 0)
+        {
+            return;
+        }
+
+        int previewCount = Mathf.Min(archivedImageEntries.Count, archivedImagePreviewPoints.Length);
+
+        for (int index = 0; index < previewCount; index++)
+        {
+            ArchivedImageEntry entry = archivedImageEntries[archivedImageEntries.Count - 1 - index];
+            RectTransform spawnPoint = archivedImagePreviewPoints[index];
+
+            if (spawnPoint == null)
+            {
+                continue;
+            }
+
+            Sprite previewSprite = CreateSpriteFromFile(entry.filePath, out Texture2D previewTexture);
+            if (previewSprite == null)
+            {
+                continue;
+            }
+
+            sh_PuzzlePieceUI previewInstance = Instantiate(archivedImagePreviewPrefab, archivedImagePreviewRoot);
+            previewInstance.Configure(new sh_PuzzlePieceData(index + 1, 0, entry.filePath), previewSprite);
+            ApplySpawnPointLayout(previewInstance.RectTransform, spawnPoint);
+
+            archivedImagePreviewInstances.Add(previewInstance);
+            archivedImagePreviewSprites.Add(previewSprite);
+            archivedImagePreviewTextures.Add(previewTexture);
+        }
+    }
+
+    private void ApplySpawnPointLayout(RectTransform targetRectTransform, RectTransform spawnPoint)
+    {
+        if (targetRectTransform == null || spawnPoint == null)
+        {
+            return;
+        }
+
+        Vector2 originalAnchorMin = targetRectTransform.anchorMin;
+        Vector2 originalAnchorMax = targetRectTransform.anchorMax;
+        Vector2 originalPivot = targetRectTransform.pivot;
+        Vector2 originalSizeDelta = targetRectTransform.sizeDelta;
+        RectTransform parentRectTransform = spawnPoint.parent as RectTransform;
+
+        if (parentRectTransform != null)
+        {
+            targetRectTransform.SetParent(parentRectTransform, false);
+        }
+
+        targetRectTransform.anchorMin = originalAnchorMin;
+        targetRectTransform.anchorMax = originalAnchorMax;
+        targetRectTransform.pivot = originalPivot;
+        targetRectTransform.sizeDelta = originalSizeDelta;
+        targetRectTransform.position = spawnPoint.position;
+        targetRectTransform.localScale = Vector3.one;
+    }
+
+    private Sprite CreateSpriteFromFile(string filePath, out Texture2D loadedTexture)
+    {
+        loadedTexture = null;
+
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return null;
+        }
+
+        byte[] imageBytes = File.ReadAllBytes(filePath);
+        loadedTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+
+        if (!ImageConversion.LoadImage(loadedTexture, imageBytes, false))
+        {
+            DestroyUnityObject(loadedTexture);
+            loadedTexture = null;
+            return null;
+        }
+
+        loadedTexture.name = Path.GetFileNameWithoutExtension(filePath);
+
+        Sprite sprite = Sprite.Create(
+            loadedTexture,
+            new Rect(0f, 0f, loadedTexture.width, loadedTexture.height),
+            new Vector2(0.5f, 0.5f),
+            archivedImagePreviewSpritePixelsPerUnit);
+        sprite.name = loadedTexture.name;
+        return sprite;
+    }
+
+    private void ClearArchivedImagePreviews()
+    {
+        for (int index = 0; index < archivedImagePreviewInstances.Count; index++)
+        {
+            if (archivedImagePreviewInstances[index] != null)
+            {
+                DestroyUnityObject(archivedImagePreviewInstances[index].gameObject);
+            }
+        }
+
+        for (int index = 0; index < archivedImagePreviewSprites.Count; index++)
+        {
+            DestroyUnityObject(archivedImagePreviewSprites[index]);
+        }
+
+        for (int index = 0; index < archivedImagePreviewTextures.Count; index++)
+        {
+            DestroyUnityObject(archivedImagePreviewTextures[index]);
+        }
+
+        archivedImagePreviewInstances.Clear();
+        archivedImagePreviewSprites.Clear();
+        archivedImagePreviewTextures.Clear();
+    }
+
+    private void DeleteAllArchivedImages()
+    {
+        for (int index = 0; index < archivedImageEntries.Count; index++)
+        {
+            DeleteArchivedEntryFile(archivedImageEntries[index]);
+        }
+
+        archivedImageEntries.Clear();
+
+        if (Directory.Exists(ArchivedImageDirectoryPath))
+        {
+            Directory.Delete(ArchivedImageDirectoryPath, true);
+        }
+
+        PlayerPrefs.DeleteKey(ArchivedImageQueuePlayerPrefsKey);
+        PlayerPrefs.Save();
+    }
+
+    private void DeleteSessionGeneratedFiles()
+    {
+        if (imageStorageService != null)
+        {
+            if (imageStorageService.TryGetSavedImagePath(out string savedImagePath))
+            {
+                DeleteFileIfExists(savedImagePath);
+            }
+
+            DeleteDirectoryIfExists(imageStorageService.StorageDirectoryPath);
+            imageStorageService.ClearSavedImageRecord();
+        }
+
+        if (imageSliceService != null)
+        {
+            DeleteDirectoryIfExists(imageSliceService.RotatingDirectoryPath);
+            DeleteDirectoryIfExists(imageSliceService.MarkerDirectoryPath);
+            imageSliceService.ClearSelectedMarkerPieceRecord();
+        }
+    }
+
+    private void ClearRuntimeRecords()
+    {
+        SelectedImagePath = string.Empty;
+        SavedImagePath = string.Empty;
+        LastSliceResult = default;
+        SelectedMarkerPieceIndex = -1;
+        isProcessingImage = false;
+    }
+
+    private static void DeleteFileIfExists(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return;
+        }
+
+        File.Delete(filePath);
+    }
+
+    private static void DeleteDirectoryIfExists(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        Directory.Delete(directoryPath, true);
+    }
+
+    private static void DestroyUnityObject(UnityEngine.Object targetObject)
+    {
+        if (targetObject == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(targetObject);
+            return;
+        }
+
+        DestroyImmediate(targetObject);
+    }
 }
